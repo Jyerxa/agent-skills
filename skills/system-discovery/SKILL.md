@@ -107,10 +107,10 @@ Apply corrections and mark it confirmed only when the user affirms it.
 User confirmation and readiness for design are separate: a user can confirm
 an accurate account that still contains a fundamental open question.
 
-Hand off the brief with any questions that affect `module-design` or
-`invariant-design`. The brief is usable without either skill installed. This
-skill ends at the brief; continue into design or implementation only when
-that work is included in the user's request.
+Hand off the brief with any questions that affect later module- and invariant-design work.
+The brief is usable without any other skills installed. This skill ends at the
+brief; continue into design or implementation only when that work is included
+in the user's request.
 
 ## Origin
 
