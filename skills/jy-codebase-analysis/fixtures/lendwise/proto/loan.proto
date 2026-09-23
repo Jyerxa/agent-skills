@@ -1,0 +1,10 @@
+syntax = "proto3";
+package lendwise;
+
+// Event published to the collections system when a loan becomes delinquent.
+message LoanDelinquent {
+  string loan_id = 1;
+  string borrower_id = 2;
+  int64 days_past_due = 3;
+  string balance = 4; // decimal string, 2 dp
+}
