@@ -1,0 +1,11 @@
+[project]
+name = "lendwise"
+version = "0.4.2"
+requires-python = ">=3.11"
+dependencies = ["flask>=3.0", "psycopg[binary]>=3.1", "protobuf>=4.25"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.ruff]
+line-length = 100
