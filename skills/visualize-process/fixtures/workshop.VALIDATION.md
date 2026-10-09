@@ -69,8 +69,8 @@ recorded 18 behavioral checks in Chromium 153.0.8010.12:
 - No JavaScript errors or external network requests
 
 The job saves full-page desktop, relationship, and mobile screenshots plus
-machine-readable results. Screenshots are captured after motion settles so
-animation frames do not masquerade as faded or missing content. The CI
+machine-readable results. Finite animations are fast-forwarded for still screenshots so intermediate
+frames do not masquerade as faded or missing content. The CI
 artifacts have a seven-day retention; the committed HTML and scripts let a
 reviewer regenerate them later.
 
