@@ -1,0 +1,49 @@
+/* Development-only browser checks. Usage: NODE_PATH=/path/to/node_modules node test_viewer.cjs [HTML] [artifact-dir] */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {pathToFileURL} = require('node:url');
+const {chromium} = require('playwright-core');
+const input=path.resolve(process.argv[2]||path.join(__dirname,'../fixtures/workshop.html'));
+const out=path.resolve(process.argv[3]||'viewer-test-artifacts');fs.mkdirSync(out,{recursive:true});
+(async()=>{
+ const browser=await chromium.launch({headless:true});
+ const page=await browser.newPage({viewport:{width:1440,height:1040}});
+ const errors=[],network=[];page.on('pageerror',error=>errors.push(String(error)));page.on('request',request=>{if(/^https?:/.test(request.url()))network.push(request.url());});
+ await page.clock.install();
+ const checks=[];const check=(name)=>{checks.push(name);console.log('PASS '+name);};
+ try {
+  await page.goto(pathToFileURL(input).href);
+  const text=await page.locator('body').innerText();assert.match(text,/Revision 1/);assert.match(text,/EXISTING/);assert.match(text,/draft/);assert.match(text,/workshop-bike-intake/);check('Baseline identity, revision, mode and agreement visible');
+  const focus=()=>page.locator('#focus .focus-card').evaluateAll(nodes=>nodes.map(n=>n.dataset.recordId));
+  assert.deepEqual(await focus(),['action-open-ticket']);assert.equal(await page.locator('#back').isDisabled(),true);assert.equal(await page.locator('#play').getAttribute('aria-pressed'),'false');check('Starts paused at first captured case step');
+  await page.locator('#next').click();assert.deepEqual(await focus(),['action-inspect']);
+  await page.locator('#back').click();assert.deepEqual(await focus(),['action-open-ticket']);
+  await page.locator('#next').press('ArrowRight');assert.deepEqual(await focus(),['action-inspect']);
+  await page.locator('#next').press('Home');assert.deepEqual(await focus(),['action-open-ticket']);check('Next, Back and scoped keyboard navigation');
+  await page.locator('#play').click();await page.clock.runFor(2601);assert.deepEqual(await focus(),['action-inspect']);
+  await page.locator('#play').click();await page.clock.runFor(6000);assert.deepEqual(await focus(),['action-inspect']);
+  await page.locator('#play').click();await page.locator('#play').click();await page.locator('#play').click();await page.clock.runFor(2601);assert.deepEqual(await focus(),['action-check-parts']);check('Play/Pause and repeated clicks never duplicate playback timers');
+  await page.locator('#scenario').selectOption('1');await page.clock.runFor(7000);assert.deepEqual(await focus(),['action-inspect','action-check-parts']);assert.match(await page.locator('#mode').innerText(),/not an execution sequence/);assert.equal(await page.locator('#play').getAttribute('aria-pressed'),'false');check('Scenario switch stops playback and preserves unordered checks');
+  await page.locator('#next').click();assert.deepEqual(await focus(),['action-decide-quote']);await page.locator('#next').click();assert.deepEqual(await focus(),['action-arrange-unrepaired-collection']);await page.locator('#next').click();assert.deepEqual(await focus(),['action-collect']);assert.equal(await page.locator('#next').isDisabled(),true);assert.equal(await page.locator('#play').isDisabled(),true);assert.match(await page.locator('#context').innerText(),/Do not assign/);check('Declined branch has no invented repair or ready state; bounded ending');
+  await page.locator('#scenario').selectOption('2');assert.deepEqual(await focus(),['action-repair']);assert.match(await page.locator('#scenario-status').innerText(),/Partial reported exception/);assert.match(await page.locator('#context').innerText(),/unknown/);check('Early-repair exception remains partial and qualified');
+  await page.locator('[data-view="rules"]').click();await page.locator('#explore [data-record="rule-accept-before-repair"]').click();assert.match(await page.locator('#inspect-fields').innerText(),/reported; policy/);assert.match(await page.locator('#inspect-fields').innerText(),/no policy exception is established/);
+  await page.locator('#inspector a[data-record="src-a3"]').click();assert.equal(await page.locator('#inspect-title').innerText(),'Acceptance policy and differing practice');assert.match(await page.locator('#inspect-fields').innerText(),/answer A3/);await page.keyboard.press('Escape');assert.equal(await page.locator('#inspector').isVisible(),false);check('Policy qualification and source traceability survive inspection; Escape closes dialog');
+  assert.equal(await page.locator('#explore [data-record="rule-notify-immediate"]').count(),1);assert.equal(await page.locator('#explore [data-record="rule-notify-batch"]').count(),1);check('Both conflicting notification accounts remain visible');
+  await page.locator('[data-view="relationships"]').click();assert.equal(await page.locator('#explore .edge').count(),6);assert.match(await page.locator('#view-note').innerText(),/neither the relative order nor concurrency/);assert.match(await page.locator('#explore').innerText(),/Whether inspection or the parts check generally comes first/);check('Only six evidence-backed edges, with ordering unknown prominent');
+  await page.screenshot({path:path.join(out,'relationships-desktop.png'),fullPage:true});
+  await page.locator('[data-view="questions"]').click();assert.equal(await page.locator('#explore .record-card').count(),5);check('All five unresolved questions are inspectable');
+  await page.locator('#scenario').selectOption('0');await page.locator('#reset').click();await page.locator('[data-view="rules"]').click();
+  await page.locator('#next').click();assert.match(await page.locator('#focus .focus-card').evaluate(n=>getComputedStyle(n).animationName),/arrive/);check('Frame change uses actual purposeful animation');
+  await page.locator('#reset').click();await page.screenshot({path:path.join(out,'workshop-desktop.png'),fullPage:true});
+  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('#reduce').isChecked(),true);assert.equal(await page.locator('#play').isDisabled(),true);await page.locator('#next').click();assert.equal(await page.locator('#focus .focus-card').evaluate(n=>getComputedStyle(n).animationName),'none');check('Reduced motion disables autoplay control and animated movement while retaining manual steps');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  for(const width of [360,390,768]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`page overflows at ${width}px`);await page.locator('#reset').click();await page.locator('#next').click();assert.deepEqual(await focus(),['action-inspect']);if(width===390)await page.screenshot({path:path.join(out,'workshop-mobile.png'),fullPage:true});}check('360px, 390px and 768px layouts have no page overflow and retain controls');
+  await page.setViewportSize({width:1440,height:1040});await page.locator('#reset').click();
+  for(let i=0;i<8;i++)await page.locator('#next').click();assert.equal(await page.locator('#counter').innerText(),'Case step 9 of 9');await page.locator('#reset').click();assert.deepEqual(await focus(),['action-open-ticket']);check('Full case reaches collection and resets completely');
+  const partial=fs.readFileSync(input,'utf8').replace(/(<script id="model-data" type="application\/json">)(.*?)(<\/script>)/s,(_,a,b,c)=>{const data=JSON.parse(b);data.scenarios=[];data.meta.mode='ENVISIONED';return a+JSON.stringify(data).replace(/</g,'\\u003c')+c;});const partialPath=path.join(out,'no-scenarios-test.html');fs.writeFileSync(partialPath,partial);await page.goto(pathToFileURL(partialPath).href);assert.equal(await page.locator('#play').isDisabled(),true);assert.match(await page.locator('#mode').innerText(),/no scenarios captured/);await page.locator('[data-view="questions"]').click();assert.equal(await page.locator('#explore .record-card').count(),5);check('No-scenario partial models keep explorer usable without inventing a case');
+  const qualified=fs.readFileSync(input,'utf8').replace(/(<script id="model-data" type="application\/json">)(.*?)(<\/script>)/s,(_,a,b,c)=>{const data=JSON.parse(b);data.records.push({id:'rel-disputed-test',fields:{Kind:'relationship',Name:'Unresolved immediate notification claim',Meaning:'One account places notification immediately after readiness.',Evidence:'disputed; practice; [A6](#src-a6)',From:'[Ready](#action-mark-ready)',To:'[Notify](#action-notify)',Relation:'immediately precedes',Guard:'Mechanic account only; unresolved against reception account.'}});data.edges.push({from:'action-mark-ready',to:'action-notify',relation:'immediately precedes',basis:[{id:'rel-disputed-test',field:'Meaning'}]});return a+JSON.stringify(data).replace(/</g,'\\u003c')+c;});const qualifiedPath=path.join(out,'qualified-edge-test.html');fs.writeFileSync(qualifiedPath,qualified);await page.goto(pathToFileURL(qualifiedPath).href);await page.locator('[data-view="relationships"]').click();const edge=page.locator('.edge').last();assert.match(await edge.innerText(),/disputed · practice/);assert.match(await edge.innerText(),/Mechanic account only; unresolved against reception account/);check('Disputed and guarded relationship qualifications are visible without opening details');
+  assert.deepEqual(errors,[]);assert.deepEqual(network,[]);check('No page errors or external network requests');
+  fs.writeFileSync(path.join(out,'results.json'),JSON.stringify({input,checks,errors,network,browser:browser.version()},null,2));
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exit(1);});
