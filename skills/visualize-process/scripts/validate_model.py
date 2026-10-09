@@ -58,6 +58,10 @@ def validate(text: str) -> list[str]:
     # Fenced examples and Mermaid code do not define records or Markdown links.
     visible = re.sub(r"^```[^\n]*\n.*?^```\s*$", "", body,
                      flags=re.MULTILINE | re.DOTALL)
+    # A malformed ID must not silently disappear from a downstream consumer.
+    for title in re.findall(r"^### (.+)$", visible, re.MULTILINE):
+        if not re.fullmatch(SLUG, title.strip()):
+            errors.append(f"Level-three headings must be lowercase record IDs: {title}")
     headings = list(HEADING.finditer(visible))
     records: dict[str, dict[str, str]] = {}
     for index, heading in enumerate(headings):
@@ -94,6 +98,8 @@ def validate(text: str) -> list[str]:
         for name in sorted(required):
             if not fields.get(name):
                 errors.append(f"{record_id}: missing {name}.")
+        if kind == "scenario" and not fields.get("Status"):
+            errors.append(f"{record_id}: missing Status.")
         if kind == "source":
             continue
         evidence = fields.get("Evidence", "")

@@ -80,6 +80,15 @@ class ModelValidationTests(unittest.TestCase):
         text = VALID.replace("[Clerk](#actor-clerk)", "[Clerk](#Actor Clerk)")
         self.assertTrue(any("Invalid record link" in e for e in validate(text)))
 
+    def test_rejects_unreferenced_malformed_record_heading(self):
+        text = VALID + "\n### action-Check\n- Kind: action\n- Name: Check\n- Meaning: A check.\n- Evidence: reported; practice; [A1](#src-a1)\n"
+        self.assertTrue(any("headings" in e for e in validate(text)))
+
+    def test_scenario_requires_explicit_status(self):
+        text = VALID + "\n### scenario-one\n- Kind: scenario\n- Name: One case\n- Meaning: A clerk opens a case.\n- Evidence: reported; practice; [A1](#src-a1)\n"
+        self.assertTrue(any("missing Status" in e for e in validate(text)))
+        self.assertEqual(validate(text + '- Status: Partial reported case; subsequent handling is unknown.\n'), [])
+
     def test_rejects_non_source_evidence(self):
         text = VALID.replace("[Answer A1](#src-a1)", "[Clerk](#actor-clerk)")
         self.assertTrue(any("source record" in e for e in validate(text)))

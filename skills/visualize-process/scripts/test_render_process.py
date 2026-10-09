@@ -78,6 +78,14 @@ class RendererTests(unittest.TestCase):
     def test_rejects_different_contract(self):
         with self.assertRaises(ValueError):parse_model(MODEL.replace('process-model/v1','process-model/v2'))
 
+    def test_malformed_unreferenced_record_cannot_disappear(self):
+        source=MODEL+'\n### action-Check\n- Kind: action\n- Name: Check\n- Meaning: A check.\n- Evidence: reported; practice; [Interview](#src-one)\n'
+        with self.assertRaisesRegex(ValueError,'headings'):parse_model(source)
+
+    def test_scenario_without_status_cannot_become_case_trace(self):
+        source=MODEL.replace('- Status: Partial account; the outcome is unknown.\n','')
+        with self.assertRaisesRegex(ValueError,'missing Status'):parse_model(source)
+
     def test_rejects_changed_baseline_even_without_revision_bump(self):
         with self.assertRaisesRegex(ValueError,'sha256'):
             build_data(MODEL.replace('A clerk checks','A manager checks'),self.view)

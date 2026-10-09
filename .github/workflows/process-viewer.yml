@@ -1,9 +1,10 @@
-name: Process viewer checks
+name: Process skills checks
 on:
   pull_request:
     paths:
       - 'skills/capture-process/**'
       - 'skills/visualize-process/**'
+      - 'skills/improve-process/**'
       - '.github/workflows/process-viewer.yml'
 permissions:
   contents: read
@@ -16,10 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate model and renderer
+      - name: Validate capture, visualization, and improvement
         run: |
           python3 -m unittest discover -s skills/capture-process/scripts -p 'test_*.py' -v
           python3 -m unittest discover -s skills/visualize-process/scripts -p 'test_*.py' -v
+          python3 -m unittest discover -s skills/improve-process/scripts -p 'test_*.py' -v
+          python3 skills/improve-process/scripts/validate_proposals.py skills/improve-process/fixtures/workshop-improvements.md --baseline skills/capture-process/fixtures/workshop-process.md
           python3 skills/visualize-process/scripts/render_process.py skills/capture-process/fixtures/workshop-process.md --view skills/visualize-process/fixtures/workshop.view.json --output /tmp/workshop.html
           cmp /tmp/workshop.html skills/visualize-process/fixtures/workshop.html
       - name: Install development-only browser test dependency
