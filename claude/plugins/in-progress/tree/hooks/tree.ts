@@ -1,5 +1,5 @@
 import type { DirListing, TreeEntry } from '../types'
-import { join, parentOf } from './paths'
+import { baseName, join, parentOf } from './paths'
 
 export type Row = {
   /** 'd:<path>' for a folder, 'f:<path>' for a file: the Button's key */
@@ -71,8 +71,8 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
       if (!listing) return
       const names = new Set(listing.entries.map(e => e.name))
       const extra: TreeEntry[] = (deletedByDir.get(dir) ?? [])
-        .map(p => p.slice(dir ? dir.length + 1 : 0))
-        .filter(name => !names.has(name) && !name.includes('/'))
+        .map(baseName)
+        .filter(name => !names.has(name))
         .map(name => ({ name, kind: 'file' as const }))
       const missing = new Set(extra.map(e => e.name))
       for (const en of sortEntries([...listing.entries, ...extra])) {
@@ -118,6 +118,10 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
   }
   return { rows: build(1), isFolded: true }
 }
+
+/** The folders directly inside `dir`, tree-relative, `.git` left out: what a walk goes on into. */
+export const childDirs = (dir: string, listing: DirListing): string[] =>
+  listing.entries.filter(en => en.kind === 'dir' && en.name !== '.git').map(en => join(dir, en.name))
 
 /** Every listed folder path except the root: what "collapse all" folds. */
 export const allDirs = (dirs: Readonly<Record<string, DirListing>>): string[] => Object.keys(dirs).filter(d => d !== '')

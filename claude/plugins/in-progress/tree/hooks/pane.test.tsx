@@ -170,7 +170,7 @@ test('an Edit marks the file active while it runs, leaves it in the trail, and /
   })
   await start($)
   await $.tool.call({ tool: 'Edit', file_path: '/repo/README.md', old_string: 'a', new_string: 'b' })
-  expect(activeDuringCall).toEqual([expect.objectContaining({ path: 'README.md', isRead: false, isOutside: false, tool: 'Edit' })])
+  expect(activeDuringCall).toEqual([expect.objectContaining({ path: 'README.md', isRead: false, tool: 'Edit' })])
   expect(lastWrite(writes, 'active')).toEqual([])
   expect(Object.keys(lastWrite(writes, 'trail') as Record<string, number>)).toEqual(['README.md'])
 

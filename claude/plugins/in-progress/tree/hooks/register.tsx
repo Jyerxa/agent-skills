@@ -3,11 +3,11 @@ import type { Color, EngineInterface, Hook, PluginOptions, Register, RenderEleme
 
 import type { ActiveFile, DirListing, FoldAnim, GitSnapshot, GitState, LineCounts, PaneView, Preview } from '../types'
 import { isDone, rowPhase, stepFor } from './anim'
-import { BLACK, CLAUDE_ACCENT, feather, glassPalette, glassRow, glowOver, glowWeight, gradientRuns, mix, parseHex, ramp, smoothstep, sweepAt, toHex, WHITE, type Rgb } from './color'
+import { BLACK, CLAUDE_ACCENT, clamp, feather, glassPalette, glassRow, glowOver, glowWeight, gradientRuns, mix, parseHex, ramp, smoothstep, sweepAt, toHex, WHITE, type Rgb } from './color'
 import { fuzzyFilter } from './find'
-import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus } from './git'
-import { ancestorsOf, baseName, cells, isWindowsPath, join, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
-import { allDirs, allFiles, flatten, type Row } from './tree'
+import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus, pathsIn } from './git'
+import { absoluteOf, ancestorsOf, baseName, cells, isAbsolute, isWindowsPath, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
+import { allDirs, allFiles, childDirs, flatten, type Row } from './tree'
 
 const PANE = 'tree'
 const FLUSH_EVERY = 25
@@ -25,6 +25,8 @@ const LEGEND_GAP = 2
 const PAD_X = 1
 const PAD_ROWS = 2
 const FILTER_MAX = 200
+/** above this many rows the tree's deepest levels start folded */
+const MAX_ROWS = 2000
 const PEEK_MAX_LINES = 5000
 const UNTRACKED_COUNT_MAX = 100
 /** how long the "last:" line lingers after Claude closes a file */
@@ -55,9 +57,7 @@ const gitAtom = atom({ plugin: 'tree', key: 'git' } as const, EMPTY_GIT)
 const activeAtom = atom({ plugin: 'tree', key: 'active' } as const, [] as ActiveFile[])
 const trailAtom = atom({ plugin: 'tree', key: 'trail' } as const, {} as Record<string, number>)
 const phaseAtom = atom({ plugin: 'tree', key: 'phase' } as const, 0)
-const tickAtom = atom({ plugin: 'tree', key: 'tick' } as const, 0)
 const showIgnoredAtom = atom({ plugin: 'tree', key: 'showIgnored' } as const, false)
-const closedByHandAtom = atom({ plugin: 'tree', key: 'closedByHand' } as const, false)
 const walkDoneAtom = atom({ plugin: 'tree', key: 'walkDone' } as const, false)
 const offsetAtom = atom({ plugin: 'tree', key: 'offset' } as const, 0)
 const viewAtom = atom({ plugin: 'tree', key: 'view' } as const, 'tree' as PaneView)
@@ -72,7 +72,6 @@ const previewAtom = atom({ plugin: 'tree', key: 'preview' } as const, null as Pr
 const previewOffsetAtom = atom({ plugin: 'tree', key: 'previewOffset' } as const, 0)
 
 export type Config = {
-  side: 'left' | 'right'
   columns: number
   openOnStart: boolean
   followClaude: boolean
@@ -80,7 +79,6 @@ export type Config = {
   shimmer: 'sweep' | 'pulse' | 'off'
   showIgnored: boolean
   compactFolders: boolean
-  maxRows: number
   accent: string
   glow: boolean
   glass: boolean
@@ -116,13 +114,10 @@ let lastPreviewVisible = 20
 let homeDir = ''
 /** whether the person's theme is a light one: picks the glow palette */
 let isLightTheme = false
-/** when Claude last closed a file: the glow fades for a moment after */
-let lastEndedAt = 0
 let animTimer: Timer | undefined
 
 function readConfig(o: PluginOptions): Config {
   return {
-    side: o['side'] === 'right' ? 'right' : 'left',
     columns: typeof o['columns'] === 'number' && o['columns'] > 0 ? Math.floor(o['columns']) : 32,
     openOnStart: o['openOnStart'] !== false,
     followClaude: o['followClaude'] !== false,
@@ -130,7 +125,6 @@ function readConfig(o: PluginOptions): Config {
     shimmer: o['shimmer'] === 'pulse' ? 'pulse' : o['shimmer'] === 'off' ? 'off' : 'sweep',
     showIgnored: o['showIgnored'] === true,
     compactFolders: o['compactFolders'] !== false,
-    maxRows: 2000,
     accent: typeof o['accent'] === 'string' && parseHex(o['accent']) ? o['accent'] : CLAUDE_ACCENT,
     glow: o['glow'] !== false,
     glass: o['glass'] !== false,
@@ -140,9 +134,21 @@ function readConfig(o: PluginOptions): Config {
   }
 }
 
-const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi)
+/** A text's lines, without the empty one after a final newline. */
+const splitLines = (text: string): string[] => {
+  const lines = text.split('\n')
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
 
-const isAbsolute = (p: string): boolean => p.startsWith('/') || /^[A-Za-z]:\//.test(p)
+const isBinary = (text: string): boolean => text.includes('\0')
+
+/** The file Claude most recently closed, and when. */
+const latestOf = (trail: Record<string, number>): [string, number] | undefined => {
+  let latest: [string, number] | undefined
+  for (const entry of Object.entries(trail)) if (!latest || entry[1] > latest[1]) latest = entry
+  return latest
+}
 
 // ---------- git ----------
 
@@ -150,9 +156,8 @@ const isAbsolute = (p: string): boolean => p.startsWith('/') || /^[A-Za-z]:\//.t
 const countLines = async ($: Dollar, abs: string): Promise<number | null> => {
   try {
     const text = await $.fs.read(abs)
-    if (text.includes('\0')) return null
-    if (text === '') return 0
-    return text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+    if (isBinary(text)) return null
+    return text === '' ? 0 : splitLines(text).length
   } catch {
     return null
   }
@@ -162,7 +167,7 @@ const readGit = async ($: Dollar, root: string, withCounts: boolean): Promise<Gi
   const at = await $.clock.now()
   try {
     const top = await $.process.run(['git', 'rev-parse', '--show-prefix'], { cwd: root, timeoutMs: 10_000 })
-    if (top.exitCode !== 0) return { ...EMPTY_GIT, at }
+    if (top.exitCode !== 0) return EMPTY_GIT
     const prefix = toPosix(top.stdout.trim())
     const [status, ignored] = await Promise.all([
       $.process.run(['git', 'status', '--porcelain=v2', '-z', '--branch', `--untracked-files=${untrackedMode}`], { cwd: root, timeoutMs: 20_000 }),
@@ -170,30 +175,28 @@ const readGit = async ($: Dollar, root: string, withCounts: boolean): Promise<Gi
     ])
     const took = (await $.clock.now()) - at
     if (took > SLOW_STATUS_MS) untrackedMode = 'normal'
-    if (status.exitCode !== 0) return { ...(await read($, gitAtom)), isRepo: true, failed: true, at }
+    if (status.exitCode !== 0) return { ...(await read($, gitAtom)), isRepo: true, failed: true }
     const parsed = parseStatus(status.stdout, prefix)
     let numstat: Record<string, LineCounts> = {}
     if (withCounts) {
       const ns = await $.process.run(['git', 'diff', 'HEAD', '--numstat', '-z'], { cwd: root, timeoutMs: 20_000 })
       if (ns.exitCode === 0) numstat = parseNumstat(ns.stdout, prefix)
-      const untracked = Object.entries(parsed.files)
-        .filter(([, s]) => s === 'untracked')
-        .slice(0, UNTRACKED_COUNT_MAX)
-      for (const [path] of untracked) {
-        const n = await countLines($, `${root}/${path}`)
+      const untracked = pathsIn(parsed.files, 'untracked').slice(0, UNTRACKED_COUNT_MAX)
+      const lineCounts = await Promise.all(untracked.map(path => countLines($, absoluteOf(root, path))))
+      untracked.forEach((path, i) => {
+        const n = lineCounts[i] ?? null
         numstat[path] = n === null ? { added: 0, removed: 0, isBinary: true } : { added: n, removed: 0, isBinary: false }
-      }
+      })
     }
     return {
       isRepo: true,
       failed: false,
-      at,
       ...parsed,
       ignored: ignored.exitCode === 0 ? parseIgnored(ignored.stdout) : [],
       numstat,
     }
   } catch {
-    return { ...(await read($, gitAtom)), failed: true, at }
+    return { ...(await read($, gitAtom)), failed: true }
   }
 }
 
@@ -211,19 +214,9 @@ const readDiff = async ($: Dollar, root: string, path: string, state: GitState |
 // ---------- walking the tree ----------
 
 const listDir = async ($: Dollar, root: string, rel: string): Promise<DirListing | undefined> => {
-  const abs = rel ? `${root}/${rel}` : root
   try {
-    const entries = await $.fs.list(abs)
-    let mtimeMs = 0
-    try {
-      mtimeMs = (await $.fs.stat(abs)).mtimeMs
-    } catch {
-      // the directory vanished between the list and the stat: keep 0
-    }
-    return {
-      entries: entries.map(x => ({ name: x.name, kind: x.kind === 'dir' ? ('dir' as const) : ('file' as const) })),
-      mtimeMs,
-    }
+    const entries = await $.fs.list(absoluteOf(root, rel))
+    return { entries: entries.map(x => ({ name: x.name, kind: x.kind === 'dir' ? ('dir' as const) : ('file' as const) })) }
   } catch {
     return undefined
   }
@@ -242,18 +235,13 @@ const walk = async ($: Dollar, root: string, start: string, walkIgnored: boolean
     batch = {}
     await update($, dirsAtom, all => ({ ...all, ...chunk }))
   }
-  while (queue.length > 0) {
+  for (let head = 0; head < queue.length; head++) {
     if (generation !== walkGeneration) return
-    const rel = queue.shift() as string
+    const rel = queue[head] as string
     const listing = await listDir($, root, rel)
     if (!listing) continue
     batch[rel] = listing
-    for (const en of listing.entries) {
-      if (en.kind !== 'dir' || en.name === '.git') continue
-      const child = join(rel, en.name)
-      if (!walkIgnored && ignored.has(`${child}/`)) continue
-      queue.push(child)
-    }
+    for (const child of childDirs(rel, listing)) if (walkIgnored || !ignored.has(`${child}/`)) queue.push(child)
     seen++
     if (rel === start || seen % FLUSH_EVERY === 0) await flush()
   }
@@ -283,7 +271,7 @@ const reconcile = async ($: Dollar, root: string, extra: Iterable<string>): Prom
       for (const anc of ancestorsOf(path)) if (!dirs[anc]) todo.add(parentOf(anc))
       continue
     }
-    const name = path.slice(dir ? dir.length + 1 : 0)
+    const name = baseName(path)
     const has = listing.entries.some(e => e.name === name)
     if ((state === 'untracked' || state === 'added') && !has) todo.add(dir)
     if (state === 'deleted' && has) todo.add(dir)
@@ -301,11 +289,7 @@ const reconcile = async ($: Dollar, root: string, extra: Iterable<string>): Prom
     }
     await update($, dirsAtom, all => ({ ...all, [dir]: listing }))
     const known = await read($, dirsAtom)
-    for (const en of listing.entries) {
-      if (en.kind !== 'dir' || en.name === '.git') continue
-      const child = join(dir, en.name)
-      if (!known[child]) void walk($, root, child, false)
-    }
+    for (const child of childDirs(dir, listing)) if (!known[child]) void walk($, root, child, false)
   }
 }
 
@@ -357,6 +341,7 @@ const armPoll = ($: Dollar): void => {
 const shimmerOnce = async ($: Dollar): Promise<void> => {
   const active = await read($, activeAtom)
   const now = await $.clock.now()
+  const lastEndedAt = latestOf(await read($, trailAtom))?.[1] ?? 0
   if (active.length === 0 && now - lastEndedAt >= SHIMMER_TAIL_MS) {
     shimmerTimer?.cancel()
     shimmerTimer = undefined
@@ -381,7 +366,7 @@ const trailOnce = async ($: Dollar): Promise<void> => {
     trailTimer = undefined
     return
   }
-  await update($, tickAtom, n => (n + 1) % 1_000_000)
+  await update($, frameAtom, n => (n + 1) % 1_000_000)
 }
 
 const armTrail = ($: Dollar): void => {
@@ -402,10 +387,12 @@ const stopTimers = (): void => {
 
 // ---------- preferences ----------
 
+/** The view a preview sits over, or the view itself while no preview shows. */
+const viewUnder = (view: PaneView, preview: Preview | null): PaneView => (view === 'file' ? (preview?.back ?? 'tree') : view)
+
 const savePrefs = async ($: Dollar): Promise<void> => {
   const root = await read($, rootAtom)
-  const view = await read($, viewAtom)
-  const under = view === 'file' ? ((await read($, previewAtom))?.back ?? 'tree') : view
+  const under = viewUnder(await read($, viewAtom), await read($, previewAtom))
   await $.store.set(`collapsed:${root}`, await read($, collapsedAtom))
   await $.store.set('prefs', {
     showIgnored: await read($, showIgnoredAtom),
@@ -446,7 +433,6 @@ type View = {
   active: ActiveFile[]
   trail: Record<string, number>
   showIgnored: boolean
-  walkDone: boolean
   view: PaneView
   filter: string | null
   focusMode: boolean
@@ -478,13 +464,13 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
   ])
   await read($, frameAtom)
   const dimKeys = new Set<string>()
-  const out = { root, git, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, focused, dimKeys }
+  const out = { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, dimKeys }
   let lines: Line[] = []
 
   // the preview in the pane draws its own body; in the band, the pane goes on showing the view under it
   const preview = view === 'file' ? await read($, previewAtom) : null
   if (view === 'file' && (cfg.previewIn === 'pane' || preview === null)) return { ...out, lines }
-  const under: PaneView = view === 'file' ? (preview?.back ?? 'tree') : view
+  const under = viewUnder(view, preview)
 
   if (under === 'peek' && peek !== null) {
     const text = peekDiff.replace(/\t/g, '  ')
@@ -501,10 +487,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
 
   if (under === 'changes') {
     for (const { state, label } of GROUPS) {
-      const paths = Object.entries(git.files)
-        .filter(([, s]) => s === state)
-        .map(([p]) => p)
-        .sort()
+      const paths = pathsIn(git.files, state).sort()
       if (paths.length === 0) continue
       lines.push({ key: `g:${state}`, kind: 'group', label })
       for (const path of paths) lines.push({ key: `f:${path}`, kind: 'change', path, state })
@@ -518,25 +501,20 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     const inPlay = new Set<string>([
       ...Object.keys(git.files),
       ...Object.keys(trail).filter(p => !isAbsolute(p)),
-      ...active.filter(a => !a.isOutside).map(a => a.path),
+      ...active.map(a => a.path).filter(p => !isAbsolute(p)),
     ])
     const keepDirs = new Set<string>()
     for (const p of inPlay) for (const a of ancestorsOf(p)) keepDirs.add(a)
     keep = (path, kind) => (kind === 'dir' ? keepDirs.has(path) : inPlay.has(path))
   }
-  const deleted = new Set(
-    Object.entries(git.files)
-      .filter(([, s]) => s === 'deleted')
-      .map(([p]) => p),
-  )
   const { rows, isFolded } = flatten(dirs, {
     collapsed: new Set(collapsed),
     showIgnored,
     ignored: new Set(git.ignored),
     compactFolders: cfg.compactFolders,
     dirCounts: git.dirCounts,
-    deleted,
-    maxRows: cfg.maxRows,
+    deleted: new Set(pathsIn(git.files, 'deleted')),
+    maxRows: MAX_ROWS,
     keep,
   })
   for (const row of rows) lines.push({ key: row.key, kind: 'row', row })
@@ -552,7 +530,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     })
   }
   if (rows.length === 0) lines.push({ key: 'note', kind: 'note', text: focusMode ? 'nothing in play yet' : walkDone ? 'empty folder' : 'listing…' })
-  if (isFolded) lines.push({ key: 'note:fold', kind: 'note', text: `deep folders folded: over ${cfg.maxRows} rows` })
+  if (isFolded) lines.push({ key: 'note:fold', kind: 'note', text: `deep folders folded: over ${MAX_ROWS} rows` })
   const outside = [...new Set([...active.map(a => a.path), ...Object.keys(trail)])].filter(isAbsolute).sort()
   if (outside.length > 0) {
     lines.push({ key: 'outside', kind: 'outsideHead' })
@@ -685,22 +663,15 @@ const expandAll = async ($: Dollar): Promise<void> => {
   await savePrefs($)
 }
 
-/** `g`: tree <-> changes; from the peek, back to the changes. */
-const toggleChanges = async ($: Dollar): Promise<void> => {
-  const view = await read($, viewAtom)
-  const next: PaneView = view === 'tree' ? 'changes' : view === 'changes' ? 'tree' : 'changes'
-  await update($, viewAtom, () => next)
-  await update($, offsetAtom, () => 0)
-  await savePrefs($)
-  if (next === 'changes') void refresh($, { walk: false })
-}
-
 const setView = async ($: Dollar, next: PaneView): Promise<void> => {
   await update($, viewAtom, () => next)
   await update($, offsetAtom, () => 0)
   await savePrefs($)
   if (next === 'changes') void refresh($, { walk: false })
 }
+
+/** `g`: tree <-> changes; from the peek, back to the changes. */
+const toggleChanges = async ($: Dollar): Promise<void> => setView($, (await read($, viewAtom)) === 'changes' ? 'tree' : 'changes')
 
 /** `z`: prune the tree to the files in play, or show it whole. */
 const toggleFocus = async ($: Dollar): Promise<void> => {
@@ -715,11 +686,7 @@ const toggleFilter = async ($: Dollar): Promise<void> => {
   if (filter === null) {
     await update($, filterAtom, () => '')
     await update($, offsetAtom, () => 0)
-    try {
-      await $.ui.focus({ requestId: PANE, key: 'filter' }) // a refusal (the pane lacks the keys) is fine: the row is still there to click
-    } catch {
-      // nothing to do: the field is drawn either way
-    }
+    await focusQuietly($, 'filter')
   } else {
     await update($, filterAtom, () => null)
     await update($, offsetAtom, () => 0)
@@ -757,6 +724,15 @@ const closePeek = async ($: Dollar): Promise<void> => {
 
 // ---------- the row cursor ----------
 
+/** Puts the pane's focus ring on `key`, so Enter presses it; a refusal (the pane lacks the keys) is fine, as the mark is drawn either way. */
+const focusQuietly = async ($: Dollar, key: string): Promise<void> => {
+  try {
+    await $.ui.focus({ requestId: PANE, key })
+  } catch {
+    // nothing to do: the mark is drawn either way
+  }
+}
+
 /** The lines the cursor stops on: the ones drawn as a pressable row. */
 const isStop = (line: Line | undefined): boolean => line !== undefined && (line.kind === 'row' || line.kind === 'change' || line.kind === 'match')
 
@@ -792,11 +768,7 @@ const moveCursor = async ($: Dollar, step: number | 'first' | 'last'): Promise<v
   lastPersonScrollAt = now // following Claude leaves the window to the person for a moment
   await update($, offsetAtom, () => offsetToShow(target, offset, lastVisible, lines.length))
   await update($, focusedAtom, () => key)
-  try {
-    await $.ui.focus({ requestId: PANE, key }) // so Enter presses the row; a refusal (the pane lacks the keys) leaves the mark alone
-  } catch {
-    // nothing to do: the cursor is drawn either way
-  }
+  await focusQuietly($, key)
 }
 
 /** The person moved the ring (Tab, a click): the window follows it. */
@@ -815,22 +787,13 @@ const showCursor = async ($: Dollar, key: string): Promise<void> => {
 const sizeText = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
-/** A text's lines, without the empty one after a final newline. */
-const splitLines = (text: string): string[] => {
-  const lines = text.split('\n')
-  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
-  return lines
-}
-
-const absoluteOf = (root: string, path: string): string => (isAbsolute(path) ? path : path ? `${root}/${path}` : root)
-
 /** A file's text for the preview, or the note that stands in for it. */
 const readPreview = async ($: Dollar, abs: string): Promise<{ text: string | null; note: string | null }> => {
   try {
     const { size } = await $.fs.stat(abs)
     if (size > PREVIEW_MAX_BYTES) return { text: null, note: `too large to preview (${sizeText(size)})` }
     const raw = await $.fs.read(abs)
-    if (raw.includes('\0')) return { text: null, note: `binary file (${sizeText(size || raw.length)})` }
+    if (isBinary(raw)) return { text: null, note: `binary file (${sizeText(size || raw.length)})` }
     if (raw === '') return { text: null, note: 'empty file' }
     // the highlighter takes tab and newline as its only control characters
     const text = raw
@@ -849,7 +812,7 @@ const openPreview = async ($: Dollar, path: string): Promise<void> => {
   const { text, note } = await readPreview($, absoluteOf(root, path))
   const view = await read($, viewAtom)
   const previous = await read($, previewAtom)
-  const back: PaneView = view === 'file' ? (previous?.back ?? 'tree') : view
+  const back = viewUnder(view, previous)
   const cursor = view === 'file' ? (previous?.cursor ?? null) : await read($, focusedAtom)
   await update($, previewAtom, () => ({ path, text, note, back, cursor }))
   await update($, previewOffsetAtom, () => 0)
@@ -865,11 +828,7 @@ const closePreview = async ($: Dollar): Promise<void> => {
   const cursor = preview?.cursor
   if (!cursor) return
   await update($, focusedAtom, () => cursor)
-  try {
-    await $.ui.focus({ requestId: PANE, key: cursor })
-  } catch {
-    // the mark is back on the row either way
-  }
+  await focusQuietly($, cursor)
 }
 
 const scrollPreview = async ($: Dollar, by: number | 'first' | 'last'): Promise<void> => {
@@ -941,13 +900,19 @@ const openTarget = async ($: Dollar): Promise<void> => {
 
 const openPane = async ($: Dollar): Promise<boolean> => {
   const opened = await $.ui.open({ id: PANE, title: 'tree', columns: cfg.columns })
-  await update($, closedByHandAtom, () => false)
   await $.store.delete(`closed:${await $.session.id()}`)
   armPoll($)
   return opened.isPlaced
 }
 
-const usage = 'tree: usage: /tree [changes | find <text> | refresh | reveal <path> | mention <path> | preview <path> | side left|right]'
+const isPaneOpen = async ($: Dollar): Promise<boolean> => (await $.ui.panes()).some(p => p.id === PANE)
+
+const ensureOpen = async ($: Dollar): Promise<void> => {
+  if (!(await isPaneOpen($))) await openPane($)
+}
+
+const VERBS = '[changes | find <text> | refresh | reveal <path> | mention <path> | preview <path> | side left|right]'
+const usage = `tree: usage: /tree ${VERBS}`
 
 // ---------- drawing ----------
 
@@ -974,6 +939,22 @@ const COLOR: Record<GitState, Color> = {
 /** a badge drawn as a chip: the letter with a cell of tint on each side */
 const CHIP_CELLS = 3
 
+/** `chars` cut into runs of neighbours that share a key: one Text each. */
+function runsBy<K>(chars: readonly string[], keyOf: (i: number) => K): { text: string; key: K }[] {
+  const runs: { text: string; key: K }[] = []
+  chars.forEach((ch, i) => {
+    const key = keyOf(i)
+    const last = runs[runs.length - 1]
+    if (last && last.key === key) last.text += ch
+    else runs.push({ text: ch, key })
+  })
+  return runs
+}
+
+/** Where a window of `shown` lines from `offset` sits in `total`: just the count when it shows them all. */
+const placeText = (offset: number, shown: number, total: number): string =>
+  shown === total ? `${total} lines` : `${offset + 1}–${offset + shown}/${total}`
+
 const countsText = (c: LineCounts | undefined): string => (c ? (c.isBinary ? 'bin' : `+${c.added} −${c.removed}`) : '')
 
 const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<RenderElement> => {
@@ -983,7 +964,6 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const now = await $.clock.now()
   const { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, lines, dimKeys } = await loadView($, now)
   const [phase, offsetWanted, preview, previewWanted] = await Promise.all([read($, phaseAtom), read($, offsetAtom), read($, previewAtom), read($, previewOffsetAtom)])
-  await read($, tickAtom)
   const isFile = view === 'file' && preview !== null
   /** the preview drawn in this pane; in the band, the pane goes on showing its rows and drives the band */
   const isFileHere = isFile && cfg.previewIn === 'pane'
@@ -1006,7 +986,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const hasSecondRow = git.isRepo || view === 'peek' || isFile
   const hasFilterRow = filter !== null && view !== 'peek' && view !== 'file'
   const current = active.length > 0 ? active[active.length - 1] : undefined
-  const latest = Object.entries(trail).sort((x, y) => y[1] - x[1])[0]
+  const latest = latestOf(trail)
   const lastPath = !current && latest && now - latest[1] < LAST_LINGER_MS ? latest[0] : undefined
   const nowPath = current?.path ?? lastPath
   const headerRows = (hasSecondRow ? 2 : 1) + (hasFilterRow ? 1 : 0) + (nowPath !== undefined ? 1 : 0)
@@ -1015,31 +995,30 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   type LegendItem = { key: string; hotkey: string; label: string; run: () => void }
   const legend: LegendItem[] = []
   const hasRows = view === 'tree' || view === 'changes'
+  const isWholeTree = view === 'tree' && filter === null
   if (isFile) {
     legend.push({ key: 'act:close', hotkey: 'q', label: 'back', run: () => void closePreview($) })
-    legend.push({ key: 'act:mention', hotkey: 'm', label: 'mention', run: () => void mentionTarget($) })
-    legend.push({ key: 'act:open', hotkey: 'o', label: 'editor', run: () => void openTarget($) })
-    legend.push({ key: 'act:down', hotkey: 'j', label: '↓', run: () => void scrollPreview($, 1) })
-    legend.push({ key: 'act:up', hotkey: 'k', label: '↑', run: () => void scrollPreview($, -1) })
   } else {
     if (view === 'peek') legend.push({ key: 'act:changes', hotkey: 'g', label: 'back', run: () => void closePeek($) })
     else legend.push({ key: 'act:changes', hotkey: 'g', label: view === 'changes' ? 'tree' : 'changes', run: () => void toggleChanges($) })
     if (view !== 'peek') legend.push({ key: 'act:filter', hotkey: 'f', label: filter === null ? 'find' : 'close', run: () => void toggleFilter($) })
-    if (view === 'tree' && filter === null) {
+    if (isWholeTree) {
       legend.push({ key: 'act:focus', hotkey: 'z', label: focusMode ? 'all' : 'focus', run: () => void toggleFocus($) })
       legend.push({ key: 'act:ignored', hotkey: 'h', label: showIgnored ? 'hide ignored' : 'ignored', run: () => void toggleIgnored($) })
     }
     legend.push({ key: 'act:refresh', hotkey: 'r', label: 'refresh', run: () => void refresh($, { walk: true }) })
-    if (view === 'tree' && filter === null) {
+    if (isWholeTree) {
       legend.push({ key: 'act:collapse', hotkey: 'c', label: 'fold', run: () => void collapseAll($) })
       legend.push({ key: 'act:expand', hotkey: 'e', label: 'unfold', run: () => void expandAll($) })
     }
-    if (hasRows) {
-      legend.push({ key: 'act:mention', hotkey: 'm', label: 'mention', run: () => void mentionTarget($) })
-      legend.push({ key: 'act:open', hotkey: 'o', label: 'editor', run: () => void openTarget($) })
-      legend.push({ key: 'act:down', hotkey: 'j', label: '↓', run: () => void moveCursor($, 1) })
-      legend.push({ key: 'act:up', hotkey: 'k', label: '↑', run: () => void moveCursor($, -1) })
-    }
+  }
+  if (isFile || hasRows) {
+    // j and k scroll the file while one shows, else move the cursor
+    const step = (by: number) => () => void (isFile ? scrollPreview($, by) : moveCursor($, by))
+    legend.push({ key: 'act:mention', hotkey: 'm', label: 'mention', run: () => void mentionTarget($) })
+    legend.push({ key: 'act:open', hotkey: 'o', label: 'editor', run: () => void openTarget($) })
+    legend.push({ key: 'act:down', hotkey: 'j', label: '↓', run: step(1) })
+    legend.push({ key: 'act:up', hotkey: 'k', label: '↑', run: step(-1) })
   }
   // the legend laid out row by row (the engine draws a plain hotkey Button as `h: label`), so every row carries the edge cell
   const legendLines: LegendItem[][] = [[]]
@@ -1095,10 +1074,16 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const hex = toHex(rgb)
     return cfg.glass || hex !== toHex(slab(i)) ? hex : undefined
   }
+  /** the dusk, from the accent at 0 to the violet at 1 */
+  const duskAt = (t: number): Rgb => ramp([pal.accent, pal.violet], t)
   /** along the dusk, 0 at the top of the pane and 1 at the bottom */
-  const dusk = (i: number): Rgb => ramp([pal.accent, pal.violet], slabRows <= 1 ? 0 : i / (slabRows - 1))
+  const dusk = (i: number): Rgb => duskAt(slabRows <= 1 ? 0 : i / (slabRows - 1))
   const hex = (rgb: Rgb): string => toHex(rgb)
   const silver = hex(pal.silver)
+  /** a row's hover: its glass lifted toward the light */
+  const lifted = (under: Rgb): { backgroundColor: string } => ({ backgroundColor: hex(mix(under, toward, pal.lift)) })
+  /** 0 to 1 and back over `period` shimmer ticks */
+  const breathe = (period: number): number => (1 - Math.cos((2 * Math.PI * phase) / period)) / 2
 
   // the ember glow: a soft bell of light around the file Claude is writing, laid over the slab, fading for a moment after
   const glowing = active.find(a => !a.isRead)
@@ -1152,7 +1137,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
       const x = (start + (from + to) / 2) / Math.max(1, width)
       const f = isFromRight ? 1 - x : x
       const strength = (pal.isLight ? 0.55 : 0.7) * (1 - smoothstep(f))
-      out.push(<Text color={hex(mix(under, ramp([pal.accent, pal.violet], f), strength))}>{'─'.repeat(to - from)}</Text>)
+      out.push(<Text color={hex(mix(under, duskAt(f), strength))}>{'─'.repeat(to - from)}</Text>)
     }
     return out
   }
@@ -1174,9 +1159,9 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const [dim, hot] = a.isRead ? pal.moon : pal.ember
     if (cfg.shimmer === 'off') return [<Text color={hex(hot)} bold>{name}</Text>]
     if (cfg.shimmer === 'pulse') {
-      const t = (1 - Math.cos((2 * Math.PI * phase) / 10)) / 2 // one breath a second
+      // one breath a second
       return [
-        <Text color={hex(mix(dim, hot, t))} bold={!a.isRead}>
+        <Text color={hex(mix(dim, hot, breathe(10)))} bold={!a.isRead}>
           {name}
         </Text>,
       ]
@@ -1184,33 +1169,15 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     // a soft band of light sweeps through, entering and leaving fully; neighbouring cells of one shade draw as one run
     const chars = [...name]
     const head = (phase % (chars.length + 6)) - 3
-    const parts: RenderElement[] = []
-    let run = ''
-    let runShade = -1
-    const flush = () => {
-      if (run) {
-        parts.push(
-          <Text color={hex(mix(dim, hot, runShade / 4))} bold={runShade >= 2}>
-            {run}
-          </Text>,
-        )
-      }
-      run = ''
-    }
-    chars.forEach((ch, i) => {
-      const shade = Math.round(sweepAt(i, head) * 4)
-      if (shade !== runShade) {
-        flush()
-        runShade = shade
-      }
-      run += ch
-    })
-    flush()
-    return parts
+    return runsBy(chars, i => Math.round(sweepAt(i, head) * 4)).map(r => (
+      <Text color={hex(mix(dim, hot, r.key / 4))} bold={r.key >= 2}>
+        {r.text}
+      </Text>
+    ))
   }
 
   /** the breathing `●`'s color, in step with its glyph: the accent warming toward the ember's brightest and back */
-  const breath = hex(mix(pal.accent, pal.ember[1], 0.7 * ((1 - Math.cos((2 * Math.PI * phase) / 9)) / 2)))
+  const breath = hex(mix(pal.accent, pal.ember[1], 0.7 * breathe(9)))
   const readDot = hex(mix(pal.moon[0], pal.moon[1], 0.5))
 
   const glyphFor = (path: string, isDir: boolean, isOpen: boolean): { glyph: string; color: string; a: ActiveFile | undefined } => {
@@ -1250,17 +1217,17 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const rightEdge = (i: number, under: Rgb = slab(i)): RenderElement => <Text backgroundColor={bgFor(featherOf(under), i)}> </Text>
 
   const drawRow = (row: Row, under: Rgb): RenderElement => {
-    const guides = '│ '.repeat(row.depth) // one faint guide per level, in the indent cells
+    const indent = 2 * row.depth // one faint guide per level, `│ `, in the indent cells
     const lit = litLevel.get(row.key)
     const { glyph, color: glyphColor, a } = glyphFor(row.path, row.kind === 'dir', row.isOpen)
     const state = git.files[row.path]
     const badge = row.kind === 'dir' ? (!row.isOpen && row.count > 0 ? String(row.count) : '') : state ? BADGE[state] : ''
     const isChip = row.kind === 'file' && badge !== ''
     const badgeCells = isChip ? CHIP_CELLS : cells(badge)
-    const nameRoom = rowCols - cells(guides) - 2 - (badge ? badgeCells + 1 : 0)
+    const nameRoom = rowCols - indent - 2 - (badge ? badgeCells + 1 : 0)
     const name = truncateMiddle(row.name, Math.max(1, nameRoom))
     const isTruncated = name !== row.name
-    const pad = Math.max(1, rowCols - cells(guides) - 2 - cells(name) - badgeCells)
+    const pad = Math.max(1, rowCols - indent - 2 - cells(name) - badgeCells)
     const nameColor: Color | undefined = row.kind === 'dir' ? undefined : state ? COLOR[state] : undefined
     const isStruck = row.isMissing || state === 'deleted'
     const isDim = row.isIgnored || dimKeys.has(row.key) // ignored, or arriving or leaving in a ripple
@@ -1288,9 +1255,9 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
               </Text>,
             ]
     // each level's guide takes a step along the dusk, faint, so depth reads as color rather than clutter
-    const guideColor = (level: number): string => hex(mix(under, ramp([pal.accent, pal.violet], Math.min(1, level / 4)), pal.isLight ? 0.42 : 0.3))
+    const guideColor = (level: number): string => hex(mix(under, duskAt(Math.min(1, level / 4)), pal.isLight ? 0.42 : 0.3))
     return (
-      <Box key={`h:${row.key}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
+      <Box key={`h:${row.key}`} flexDirection="row" flexGrow={1} hover={lifted(under)}>
         <Button plain key={row.key} onPress={press(row)} hover={{ bold: true, dimColor: false }}>
           {Array.from({ length: row.depth }, (_, level) => (
             <Text color={level === lit ? hex(pal.accent) : guideColor(level)}>│ </Text>
@@ -1301,7 +1268,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
           {nameNodes}
         </Button>
         {badge ? <Text>{' '.repeat(pad)}</Text> : null}
-        {badge && isChip && state ? (
+        {isChip && state ? (
           <Text backgroundColor={hex(mix(under, pal.hues[state], pal.isLight ? 0.16 : 0.22))}>
             {' '}
             <Text color={COLOR[state]} bold>
@@ -1309,10 +1276,10 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
             </Text>{' '}
           </Text>
         ) : badge ? (
-          <Text color={hex(mix(under, ramp([pal.accent, pal.violet], Math.min(1, row.depth / 4)), 0.7))}>{badge}</Text>
+          <Text color={hex(mix(under, duskAt(Math.min(1, row.depth / 4)), 0.7))}>{badge}</Text>
         ) : null}
         {isTruncated ? (
-          <Box position="absolute" top={0} left={cells(guides) + 2} display="none" hover={{ display: 'flex' }}>
+          <Box position="absolute" top={0} left={indent + 2} display="none" hover={{ display: 'flex' }}>
             <Text inverse>{row.name}</Text>
           </Box>
         ) : null}
@@ -1337,7 +1304,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const shownPath = shortenPath(path, Math.max(1, room))
     const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(countsShown) - 2)
     return (
-      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
+      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={lifted(under)}>
         <Button plain key={`f:${path}`} onPress={() => void openPreview($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : <Text color={COLOR[state]} strikethrough={state === 'deleted'}>{shownPath}</Text>}
         </Button>
@@ -1357,28 +1324,20 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const badge = state ? BADGE[state] : ''
     const room = rowCols - 2 - (badge ? 2 : 0)
     const shownPath = truncateStart(path, Math.max(1, room))
-    const cut = path.length - shownPath.length + (shownPath.startsWith('…') ? 1 : 0) // chars dropped from the start, less the ellipsis
-    const hit = new Set(indices.map(i => i - cut + (shownPath.startsWith('…') ? 1 : 0)))
-    const chars = [...shownPath]
-    const parts: RenderElement[] = []
-    let run = ''
-    let runHit = false
-    const flush = () => {
-      if (run) parts.push(runHit ? <Text color="claude" bold>{run}</Text> : <Text color={state ? COLOR[state] : undefined}>{run}</Text>)
-      run = ''
-    }
-    chars.forEach((ch, i) => {
-      const isHit = hit.has(i)
-      if (isHit !== runHit) {
-        flush()
-        runHit = isHit
-      }
-      run += ch
-    })
-    flush()
+    const shift = path.length - shownPath.length // where the path's chars sit in the shown one, past the ellipsis that stands for the cut
+    const hit = new Set(indices.map(i => i - shift))
+    const parts = runsBy([...shownPath], i => hit.has(i)).map(r =>
+      r.key ? (
+        <Text color="claude" bold>
+          {r.text}
+        </Text>
+      ) : (
+        <Text color={state ? COLOR[state] : undefined}>{r.text}</Text>
+      ),
+    )
     const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(badge))
     return (
-      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
+      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={lifted(under)}>
         <Button plain key={`f:${path}`} onPress={() => void openPreview($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : parts}
         </Button>
@@ -1443,21 +1402,26 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     }
   }
 
+  /** The scrollbar's cell beside shown line `s`: the thumb carries the dusk along its length; the track is barely there. */
+  const barCell = (s: number, under: Rgb): RenderElement => {
+    const isThumb = s >= thumbStart && s < thumbStart + thumbLen
+    const color = isThumb ? duskAt(thumbLen <= 1 ? 0.5 : (s - thumbStart) / (thumbLen - 1)) : mix(under, pal.silver, 0.22)
+    return <Text color={hex(color)}>{isThumb ? '┃' : '│'}</Text>
+  }
+
   /** A shown line: the rim, the line on its slab and glow, and the scrollbar cell at the right edge while the lines overflow. */
   const drawShown = (line: Line, s: number): RenderElement => {
     const i = bodyStart + s
     const isCursor = isFocused && focused === line.key
-    const under = isCursor ? mix(lineUnder(s, line), toward, pal.lift) : lineUnder(s, line) // the cursor row stays lit as a hover would
+    const base = lineUnder(s, line)
+    const under = isCursor ? mix(base, toward, pal.lift) : base // the cursor row stays lit as a hover would
     const el = drawLine(line, under)
-    const isThumb = s >= thumbStart && s < thumbStart + thumbLen
-    // the thumb carries the dusk along its length; the track is barely there
-    const barColor = isThumb ? hex(ramp([pal.accent, pal.violet], thumbLen <= 1 ? 0.5 : (s - thumbStart) / (thumbLen - 1))) : hex(mix(under, pal.silver, 0.22))
     return (
       <Box flexDirection="row" backgroundColor={bgFor(under, i)}>
         {edge(i, line.key, litOf(s), under)}
         {hasBar ? <Box width={rowCols}>{el}</Box> : <Box flexGrow={1}>{el}</Box>}
         {hasBar ? <Text> </Text> : null}
-        {hasBar ? <Text color={barColor}>{isThumb ? '┃' : '│'}</Text> : null}
+        {hasBar ? barCell(s, under) : null}
         {rightEdge(i, under)}
       </Box>
     )
@@ -1470,10 +1434,6 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const drawFile = (p: Preview): RenderElement => {
     const rows = Array.from({ length: bodyCount }, (_, s) => bodyStart + s)
     const mid = slab(bodyStart + Math.floor(bodyCount / 2))
-    const barColor = (s: number): string => {
-      const isThumb = s >= thumbStart && s < thumbStart + thumbLen
-      return isThumb ? hex(ramp([pal.accent, pal.violet], thumbLen <= 1 ? 0.5 : (s - thumbStart) / (thumbLen - 1))) : hex(mix(slab(bodyStart + s), pal.silver, 0.22))
-    }
     return (
       <Box key="b:file" flexDirection="row">
         <Box flexDirection="column">{rows.map(i => edge(i))}</Box>
@@ -1491,7 +1451,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
             {rows.map((i, s) => (
               <Text backgroundColor={bgFor(slab(i), i)}>
                 {' '}
-                <Text color={barColor(s)}>{s >= thumbStart && s < thumbStart + thumbLen ? '┃' : '│'}</Text>
+                {barCell(s, slab(i))}
               </Text>
             ))}
           </Box>
@@ -1552,10 +1512,8 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     : !isFileHere
       ? 'below ↙' // the band above the prompt shows it, with its own position
       : preview.text === null
-      ? ''
-      : fileShown.length === fileLines.length
-        ? `${fileLines.length} lines`
-        : `${offset + 1}–${offset + fileShown.length}/${fileLines.length}`
+        ? ''
+        : placeText(offset, fileShown.length, fileLines.length)
   const filePath = isFile ? shortenPath(preview.path, Math.max(1, cols - 2 - (filePlace ? cells(filePlace) + 1 : 0)), homeDir) : ''
   const filePad = Math.max(1, cols - 2 - cells(filePath) - cells(filePlace))
 
@@ -1619,7 +1577,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
         </Box>
       ) : null}
       {nowPath !== undefined ? (
-        <Box key="h:now" flexDirection="row" backgroundColor={bgFor(slab(nowAt), nowAt)} hover={{ backgroundColor: hex(mix(slab(nowAt), toward, pal.lift)) }}>
+        <Box key="h:now" flexDirection="row" backgroundColor={bgFor(slab(nowAt), nowAt)} hover={lifted(slab(nowAt))}>
           {edge(nowAt, 'act:now')}
           <Button plain key="act:now" onPress={() => void jumpTo($, nowPath)} hover={{ bold: true, dimColor: false }}>
             {current ? <Text color={current.isRead ? readDot : breath}>●</Text> : <Text color={silver}>·</Text>}{' '}
@@ -1719,7 +1677,7 @@ const drawBand = async ($: RenderDollar, e: RenderInput<'AbovePrompt'>): Promise
   const offset = clamp(offsetWanted, 0, Math.max(0, lines.length - visible))
   const shown = lines.slice(offset, offset + visible)
   const below = Math.max(0, lines.length - offset - shown.length)
-  const place = preview.text === null ? '' : shown.length === lines.length ? `${lines.length} lines` : `${offset + 1}–${offset + shown.length}/${lines.length}`
+  const place = preview.text === null ? '' : placeText(offset, shown.length, lines.length)
   const state = (await read($, gitAtom)).files[preview.path]
   const path = shortenPath(preview.path, Math.max(8, Math.floor(cols / 2)), homeDir)
   const inner = cols - 2 * BAND_BORDER - 2 * BAND_PAD_X // the frame and the cell of room inside it on each side
@@ -1762,7 +1720,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'tree',
       description: 'File tree pane: toggle it, or changes, find <text>, refresh, reveal <path>, mention <path>, preview <path>, side left|right',
-      argumentHint: '[changes | find <text> | refresh | reveal <path> | mention <path> | preview <path> | side left|right]',
+      argumentHint: VERBS,
     })
     const root = normalizeRoot(await $.session.root())
     homeDir = normalizeRoot((await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? '')
@@ -1779,7 +1737,6 @@ export const register: Register = (on, options) => {
     await update($, focusedAtom, () => null)
     await loadPrefs($, root)
     const closed = (await $.store.get(`closed:${await $.session.id()}`)) === true
-    await update($, closedByHandAtom, () => closed)
     const started = await next(e)
     if (cfg.openOnStart && e.isInteractive && !closed) {
       void $.ui.open({ id: PANE, title: 'tree', columns: cfg.columns })
@@ -1794,8 +1751,7 @@ export const register: Register = (on, options) => {
     const arg = rest.join(' ')
     switch (verb) {
       case '': {
-        const isOpen = (await $.ui.panes()).some(p => p.id === PANE)
-        if (isOpen) {
+        if (await isPaneOpen($)) {
           await $.ui.close({ id: PANE })
           return { text: 'tree: closed.' }
         }
@@ -1804,12 +1760,12 @@ export const register: Register = (on, options) => {
         return { text: isPlaced ? 'tree: opened.' : 'tree: opened; it shows once the terminal is wide enough (110 columns in fullscreen).' }
       }
       case 'changes': {
-        if (!(await $.ui.panes()).some(p => p.id === PANE)) await openPane($)
+        await ensureOpen($)
         await setView($, 'changes')
         return { text: 'tree: showing the changes.' }
       }
       case 'find': {
-        if (!(await $.ui.panes()).some(p => p.id === PANE)) await openPane($)
+        await ensureOpen($)
         await update($, viewAtom, v => (v === 'peek' ? 'changes' : v))
         await setFilter($, arg)
         return { text: arg ? `tree: finding ${arg}.` : 'tree: filter opened.' }
@@ -1834,7 +1790,7 @@ export const register: Register = (on, options) => {
       case 'preview': {
         if (!arg) return { text: 'tree: preview needs a path.' }
         const rel = relativeTo(await read($, rootAtom), arg) ?? toPosix(arg) // outside the root, the absolute path
-        if (!(await $.ui.panes()).some(p => p.id === PANE)) await openPane($)
+        await ensureOpen($)
         await openPreview($, rel)
         return { text: `tree: previewing ${rel}.` }
       }
@@ -1858,18 +1814,13 @@ export const register: Register = (on, options) => {
     const root = await read($, rootAtom)
     const rel = relativeTo(root, raw)
     const path = rel ?? toPosix(raw)
-    const since = await $.clock.now()
-    await update($, activeAtom, list => [
-      ...list,
-      { path, isOutside: rel === null, toolUseId: e.tool_use_id, tool: String(e.tool), agentId: e.agentId, since, isRead },
-    ])
+    await update($, activeAtom, list => [...list, { path, toolUseId: e.tool_use_id, tool: String(e.tool), isRead }])
     if (rel !== null && cfg.followClaude) void reveal($, rel)
     armShimmer($)
     try {
       return await next(e)
     } finally {
       const ended = await $.clock.now()
-      lastEndedAt = ended
       await update($, activeAtom, list => list.filter(a => a.toolUseId !== e.tool_use_id))
       await update($, trailAtom, t => ({ ...t, [path]: ended }))
       armTrail($)
@@ -1924,13 +1875,10 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.close', { id: PANE }, async ($, e, next) => {
-    if (e.origin.kind === 'person') {
-      await update($, closedByHandAtom, () => true)
-      await $.store.set(`closed:${await $.session.id()}`, true)
-    }
+    if (e.origin.kind === 'person') await $.store.set(`closed:${await $.session.id()}`, true)
     if ((await read($, viewAtom)) === 'file') {
       // a preview does not outlive its pane: it opens again on the view under it, at the tree's width
-      const back = (await read($, previewAtom))?.back ?? 'tree'
+      const back = viewUnder('file', await read($, previewAtom))
       await update($, viewAtom, () => back)
       await update($, previewAtom, () => null)
     }
@@ -1962,16 +1910,17 @@ export const register: Register = (on, options) => {
     if (isPerson) lastPersonScrollAt = await $.clock.now()
     const isJump = Math.abs(e.by) > e.bodyRows
     const isPage = !isJump && Math.abs(e.by) === e.bodyRows && e.bodyRows > 1
-    const jump = e.by < 0 ? ('first' as const) : ('last' as const)
+    /** the key's move over a window of `visible` lines: to an end, a page (less a line kept for context), or as many as asked */
+    const stepOver = (visible: number) => (isJump ? (e.by < 0 ? ('first' as const) : ('last' as const)) : isPage ? Math.sign(e.by) * Math.max(1, visible - 1) : e.by)
     // while a file shows, the keys scroll it; the wheel too, but over the pane's rows when the band shows the file
     const isWheelOverRows = cfg.previewIn === 'band' && e.pointer !== undefined
     if ((await read($, viewAtom)) === 'file' && !isWheelOverRows) {
-      await scrollPreview($, isJump ? jump : isPage ? Math.sign(e.by) * Math.max(1, lastPreviewVisible - 1) : e.by)
+      await scrollPreview($, stepOver(lastPreviewVisible))
       return {}
     }
     if (lastPlacement !== 'dock') return next(e)
     if (isPerson && e.pointer === undefined) {
-      await moveCursor($, isJump ? jump : isPage ? Math.sign(e.by) * Math.max(1, lastVisible - 1) : e.by)
+      await moveCursor($, stepOver(lastVisible))
       return {}
     }
     await scrollBy($, e.by, isJump)

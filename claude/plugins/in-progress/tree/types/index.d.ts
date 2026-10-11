@@ -1,7 +1,7 @@
 export type TreeEntry = { name: string; kind: 'file' | 'dir' }
 
-/** One listed directory: its entries and the mtime it was listed at. */
-export type DirListing = { entries: TreeEntry[]; mtimeMs: number }
+/** One listed directory: its entries. */
+export type DirListing = { entries: TreeEntry[] }
 
 export type GitState =
   | 'modified'
@@ -28,7 +28,6 @@ export type GitSnapshot = {
   ignored: string[]
   /** tree-relative path -> lines added and removed against HEAD; filled while the Changes view is open */
   numstat: Record<string, LineCounts>
-  at: number
 }
 
 export type PaneView = 'tree' | 'changes' | 'peek' | 'file'
@@ -60,11 +59,8 @@ export type FoldAnim = {
 export type ActiveFile = {
   /** tree-relative path, or an absolute path when outside the root */
   path: string
-  isOutside: boolean
   toolUseId: string
   tool: string
-  agentId?: string
-  since: number
   isRead: boolean
 }
 
@@ -78,9 +74,7 @@ declare module 'claude-code' {
       active: ActiveFile[]
       trail: Record<string, number>
       phase: number
-      tick: number
       showIgnored: boolean
-      closedByHand: boolean
       walkDone: boolean
       /** first visible line of the pane's own scroll window */
       offset: number
@@ -99,7 +93,7 @@ declare module 'claude-code' {
       previewOffset: number
       /** the fold or unfold ripple in progress */
       anim: FoldAnim | null
-      /** animation frame counter: a write redraws the pane */
+      /** frame counter for the fold ripple and the trail's fade: a write redraws the pane */
       frame: number
     }
   }

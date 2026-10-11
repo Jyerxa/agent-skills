@@ -1,23 +1,12 @@
 /** Timing for the fold and unfold animation: rows ripple in from the top, or out from the bottom, each a step after the last. */
 
-export type AnimKind = 'fold' | 'unfold'
-
-export type Anim = {
-  kind: AnimKind
-  /** the folder whose rows move */
-  path: string
-  startedAt: number
-  /** how many rows the folder contributes */
-  count: number
-  stepMs: number
-}
+import type { FoldAnim as Anim } from '../types'
+import { clamp } from './color'
 
 /** the whole ripple takes at most this long, however many rows */
 export const ANIM_MAX_MS = 400
 export const ANIM_MIN_STEP_MS = 12
 export const ANIM_MAX_STEP_MS = 40
-
-const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi)
 
 /** The delay between one row and the next, so a big folder ripples faster per row than a small one. */
 export const stepFor = (count: number): number => clamp(Math.floor(ANIM_MAX_MS / Math.max(1, count)), ANIM_MIN_STEP_MS, ANIM_MAX_STEP_MS)
