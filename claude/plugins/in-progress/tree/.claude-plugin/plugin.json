@@ -78,6 +78,19 @@
       "title": "Animate folds",
       "description": "Ripple rows in and out when a folder opens or closes.",
       "default": true
+    },
+    "editor": {
+      "type": "string",
+      "title": "Editor command",
+      "description": "What the o key runs to open a file: {path} is its absolute path, {line} the preview's top line. Use an editor that opens its own window (a terminal editor cannot take over Claude's screen).",
+      "default": "code -g {path}:{line}"
+    },
+    "previewIn": {
+      "type": "string",
+      "title": "Preview in",
+      "description": "Where a file preview shows. band: above the prompt, as wide as the transcript, driven from the tree pane. pane: inside the tree pane.",
+      "options": ["band", "pane"],
+      "default": "band"
     }
   }
 }

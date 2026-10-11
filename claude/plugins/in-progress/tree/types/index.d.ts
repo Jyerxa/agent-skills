@@ -31,7 +31,21 @@ export type GitSnapshot = {
   at: number
 }
 
-export type PaneView = 'tree' | 'changes' | 'peek'
+export type PaneView = 'tree' | 'changes' | 'peek' | 'file'
+
+/** The file the preview shows, and where the pane goes back to. */
+export type Preview = {
+  /** tree-relative path, or absolute outside the root */
+  path: string
+  /** the text, cleaned for the highlighter; null when a note stands in for it */
+  text: string | null
+  /** why there is no text: binary, too large, unreadable; or 'empty file' */
+  note: string | null
+  /** the view the preview was opened from */
+  back: PaneView
+  /** the row the cursor was on, put back when the preview closes */
+  cursor: string | null
+}
 
 export type FoldAnim = {
   kind: 'fold' | 'unfold'
@@ -77,8 +91,12 @@ declare module 'claude-code' {
       /** the file whose diff the peek shows */
       peek: string | null
       peekDiff: string
-      /** the key of the element holding the pane's focus ring, for the cursor mark */
+      /** the key of the element holding the pane's focus ring: the row cursor */
       focused: string | null
+      /** the file the preview shows while the view is 'file' */
+      preview: Preview | null
+      /** the preview window's first line, 0-based */
+      previewOffset: number
       /** the fold or unfold ripple in progress */
       anim: FoldAnim | null
       /** animation frame counter: a write redraws the pane */

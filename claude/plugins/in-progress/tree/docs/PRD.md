@@ -1,6 +1,6 @@
 # PRD: Tree, a live file tree pane for Claude Code
 
-**Version** 0.1 draft, 2026-10-10
+**Version** 0.2 draft, 2026-10-10 (adds M5: keyboard navigation and file preview, §4.8, §5.7, A.9)
 **Author** jeremiah, drafted with Claude
 **Target stack** Claude Code 2.1.296 function-hooks plugin ("mod"): a TypeScript/JSX hooks module drawn on the Ink terminal surface; the git CLI for status
 
@@ -94,8 +94,13 @@ Identity: plugin id `tree`, pane id `tree`, slash command `/tree`, folder `claud
 
 | Input | Where | Effect |
 |---|---|---|
+| ↑ / ↓, `j` / `k` | focused pane | Move the row cursor one row (F25). The window scrolls to keep the cursor two rows from its edge. |
+| PgUp / PgDn, Home / End | focused pane | Move the cursor a page, or to the first or last row. |
+| Mouse wheel | pane | Scroll the window; the cursor stays where it is. |
 | Click / Enter on a folder row | tree | Toggle expand. |
-| Click / Enter on a file row | tree, changes | Insert `@relative/path ` into the composer at the cursor. If the composer refuses (a dialog is up), toast the path instead. |
+| Click / Enter on a file row | tree, changes, filter | Open the file preview (F26). Changed from v1, where this mentioned the file: the engine reports a click and Enter as the same press, so they cannot do different things. |
+| `m` | focused pane, preview | Insert `@relative/path ` for the cursor's file (or the previewed file) into the composer at the cursor. If the composer refuses (a dialog is up), toast the path instead. |
+| `o` | focused pane, preview | Open the cursor's file (or the previewed file, at its top line) in the configured `editor` (F27). |
 | Click `±` | changes view | Open the diff peek for that file inside the pane; `g` or the header row goes back. |
 | `f` | focused pane | Show the filter input and focus it; again to close. |
 | `g` | focused pane | Toggle tree / changes view; from the peek, back to the changes. |
@@ -107,13 +112,15 @@ Identity: plugin id `tree`, pane id `tree`, slash command `/tree`, folder `claud
 | Hover a row | tree, changes | Row lights (name at full strength, bold). A truncated name reveals a one-row card with the full relative path, painted over the rows beneath so nothing reflows. |
 | Esc | focused pane | Engine returns the keys to the prompt; the pane stays open. |
 
-Engine keys the plugin never rebinds: ctrl+x tab focuses the band, then each pane, then the prompt; ctrl+x ←/↑ and ctrl+x →/↓ resize the dock; ↑ ↓, PgUp PgDn, Home End scroll a focused pane; ctrl+x x closes it. `pane:next` / `pane:previous` exist unbound; the README suggests a binding for people who also use the peek pane.
+Engine keys the plugin never rebinds: ctrl+x tab focuses the band, then each pane, then the prompt; ctrl+x ←/↑ and ctrl+x →/↓ resize the dock; ctrl+x x closes a pane; Tab walks the focus ring. The engine sends ↑ ↓, PgUp PgDn and Home End to a focused pane as scroll moves. Tree tells them apart from the wheel (a key carries no pointer cell) and turns them into cursor moves (F25). The wheel still scrolls. `pane:next` / `pane:previous` exist unbound.
 
-The legend lists only the keys that apply to the view on screen: the full set in the tree, `g f r` in the Changes view, `g r` in the peek.
+Space cannot be bound. A pane hotkey is one digit or one lowercase letter, and the only way to receive raw keys is a `Client` region, which takes them only after a click. Enter toggles folders instead.
+
+The legend lists only the keys that apply to the view on screen: the full set in the tree, `g f r m o j k` in the Changes view, `g r` in the diff peek, `q m o j k` in the file preview. `j` and `k` are hotkeys, so they need Buttons; they sit in the legend as `j: ↓  k: ↑`.
 
 ### 4.6 Commands and configuration
 
-Commands: `/tree` (toggle), `/tree changes`, `/tree reveal <path>`, `/tree refresh`, `/tree side left|right`, `/tree mention <path>`.
+Commands: `/tree` (toggle), `/tree changes`, `/tree reveal <path>`, `/tree refresh`, `/tree side left|right`, `/tree mention <path>`, `/tree preview <path>` (opens the preview, F26).
 
 Configuration (`userConfig` in `plugin.json`; each field is a `/config` row):
 
@@ -131,17 +138,69 @@ Configuration (`userConfig` in `plugin.json`; each field is a `/config` row):
 | `glow` | boolean | true | Tint the rows around the file Claude is editing. |
 | `glass` | boolean | true | Draw the pane on the tinted glass slab (§5.6). Off, rows sit on the terminal's own background. |
 | `animate` | boolean | true | Ripple rows on fold and unfold. |
+| `editor` | string | `code -g {path}:{line}` | The command `o` runs (F27). `{path}` is the file's absolute path, `{line}` the preview's top line (1 from the tree). Split on spaces; a part in double quotes stays whole. |
+| `previewIn` | string: `band`, `pane` | `band` | Where a file preview shows: the band above the prompt, as wide as the transcript (F26), or inside the tree pane. |
 | `icons` | string: `unicode`, `nerd` | `unicode` | Glyph set (later). |
 
 ### 4.7 Views (built 2026-10-10, chosen one by one by the user)
 
 - F21. **Changes view** (`g`, `/tree changes`): a flat list of only the changed files, grouped by state (Conflicted, Modified, Staged, Added, Renamed, Deleted, Untracked), with `+n −m` line counts from `git diff HEAD --numstat` (untracked files counted by reading them; binaries say `bin`). Paths are truncated at the start so the file name always shows. A `±` button at the right edge opens the **diff peek**: the file's unified diff against HEAD (an untracked file against nothing), colored by line, shown inside the same pane with the file and its counts in the header; `g` or the header goes back. Line counts are fetched only while this view is open.
-- F22. **Filter** (`f`, `/tree find <text>`): an input row under the header narrows every listed file to fuzzy matches (each query character in order; boundary hits and runs rank higher, and a match in the file name beats one in a folder, so `prd` finds `docs/PRD.md`). Matches show flattened with the hits in `claude` color, best first, capped at 200. Enter mentions the best match; `×` or `f` closes. Surfaces without an input field show the text and take `/tree find`.
+- F22. **Filter** (`f`, `/tree find <text>`): an input row under the header narrows every listed file to fuzzy matches (each query character in order; boundary hits and runs rank higher, and a match in the file name beats one in a folder, so `prd` finds `docs/PRD.md`). Matches show flattened with the hits in `claude` color, best first, capped at 200. Enter previews the best match (it mentioned it before M5; `m` on a match row still does); `×` or `f` closes. Surfaces without an input field show the text and take `/tree find`.
 - F23. **Focus mode** (`z`): prune the tree to the files with git changes or touched by Claude this session and the folders that lead to them, so the tree breathes with the work. Remembered across sessions.
 - F24. **Scroll cue.** While the rows overflow the window, a one-cell scrollbar at the right edge (dim track, bright thumb sized and placed by the window) and dim `↑ N more` / `↓ N more` lines in the blank rows under the header and above the legend. Nothing is drawn when the tree fits.
-- Pitched and skipped by the user: **open in editor** (a hover button running a configurable editor command).
+- Pitched and skipped by the user: **open in editor** (a hover button running a configurable editor command). Brought back in M5 as the keyboard-only `o` (F27).
 
-### 4.8 Later
+### 4.8 Keyboard and preview (M5, planned 2026-10-10)
+
+The person asked for this after focusing the pane with ctrl+x tab: move with the arrows or j/k, fold folders from the keyboard, and press Enter on a text file to read it inside Claude, the way the plan-mode preview shows a plan.
+
+- F25. **Row cursor.** While the pane holds the keyboard, one row carries the cursor: the thick `▍` edge mark that already shows the focus ring, plus the hover tint across the row. The cursor *is* the engine's focus ring, so Enter presses the cursor row's Button.
+  - ↑ / ↓ and `j` / `k` move it one selectable row. Notes, group headings and the "outside project" heading are skipped. A change row's `±` button is not a stop; the row is.
+  - PgUp / PgDn move it a window's height; Home / End go to the first or last row.
+  - The window follows the cursor, keeping it two rows from the top or bottom edge while there are rows beyond.
+  - Tab and clicks still move the ring, and the cursor goes with it.
+  - The wheel scrolls the window without moving the cursor. A cursor scrolled out of view comes back into view on the next key.
+  - Following Claude (auto-reveal) moves the window, never the cursor.
+  - When the cursor's row disappears (folded away, deleted, filtered out), the cursor lands on the nearest row above it.
+  - First focus puts the cursor on the first row in view.
+- F26. **Preview.** Click or Enter on a file enters the `file` view. By default (`previewIn: band`) the file draws in the band above the prompt, where plan mode and the question dialogs show. The band is as wide as the transcript and as tall as the engine lets it be (half the terminal, the prompt included). It sits in a rounded frame in the accent color, with a header row (`▍path  41–50/1575` with the key hint), the file, and a cue row (`↑ 40 above   ↓ 1525 more`).
+  - The tree pane keeps its rows and the keyboard, and drives the band: its keys and `j`/`k` scroll the file; the wheel over the band scrolls the file, the wheel over the pane scrolls the tree.
+  - The pane's header shows `‹ path  below ↙`.
+  - Pressing another file's row previews that file instead.
+  - With `previewIn: pane` the file draws inside the tree pane, at the pane's width.
+  - `q`, or a press on the `‹ path` row, closes the preview; the cursor stays on the same row. Esc hands the keys to the prompt as always and leaves the preview up.
+  - While a survey holds the band, the band yields to it.
+  - The header row shows the file's `~`-relative path, its git badge, and its line count.
+  - The body is the file drawn by the engine's own highlighter (`Code`, the language from the file's extension), with a line-number gutter. Long lines are cut at the edge with `…`, so one line is always one row and paging stays exact.
+  - Only the lines in the window are handed to the engine, so a file of any length draws, and the 100,000-character limit for one drawing is never reached.
+  - ↑ ↓ / `j` `k` scroll one line, PgUp PgDn a page, Home End the top and bottom; the wheel scrolls too.
+  - The legend reads `q: back  m: mention  o: editor  j: ↓  k: ↑`. The file row shows the position (`41–80/1575`, or `N lines` when it all fits).
+  - A file Claude writes while it is previewed is read again when the write ends, keeping the scroll position.
+  - CRLF line endings are normalized, tabs draw as two spaces, and other control characters are dropped (the highlighter takes only tab and newline). Up to 20,000 lines are shown.
+  - `/tree preview <path>` opens it from the prompt.
+- F27. **Mention and editor.**
+  - `m` mentions the cursor's file in the tree, Changes and filter views, and the previewed file in the preview. On a folder it mentions the folder (`@hooks/`).
+  - `o` runs `editor` with `{path}` and `{line}` filled in: from the tree, line 1; from the preview, the top line in view.
+  - Windows: `code` is a `.cmd` script and processes start with no shell, so a command with no extension runs as `cmd /c <command>`.
+  - It waits up to 10 seconds. A non-zero exit, or a command that cannot start, toasts `tree: editor failed: <first line of stderr>`.
+  - Only editors that open their own window work. A terminal editor (vim, nano) cannot take over Claude's screen; the README says so and suggests `wt nvim {path}` or the like.
+- F28. **Files that are not text.**
+  - A file over 1 MB opens the preview with the note `too large to preview (3.2 MB)`.
+  - A file with a NUL byte gets `binary file (48 KB)`.
+  - A file that cannot be read gets `cannot read: <reason>`.
+  - In each case the legend keeps `o: editor`, and `m` still mentions.
+  - Text is read as UTF-8, and tabs draw as two spaces, as in the diff peek.
+
+Engine facts this rests on (build 2.1.296, from the shipped types):
+- `ui.scroll` reports the person's scroll keys with `by` of one row, a page (`bodyRows`) or the whole tree (`contentRows`), and with no `pointer`; a wheel tick carries one.
+- `$.ui.focus({ requestId, key })` moves the ring onto a drawn element, and Enter presses the focused Button.
+- `$.ui.open` takes `focus`, `closeOnEscape` and `columns`.
+- `Code` takes `startLine` and `wrap: 'truncate-end'`.
+- `$.process.run` runs an argv with no shell.
+
+**Why the preview is drawn above the prompt.** The plan was a second pane, `preview`, opened with `focus`. On a closer read during the build, the doc for `focus` on `$.ui.open` says outright that it is refused while the person holds another pane. The person always holds the tree when pressing Enter, so a second pane would open without the keyboard. A second pane would also become a tab hiding the tree, as with the diff peek. So the preview became the tree pane's own `file` view. The first build widened it by re-opening the tree's id with a larger `columns`. Tried live on 2026-10-10, the dock did not widen: a re-open keeps the pane's width. A pane can't draw outside its own region either, because an absolute `Box` is clipped by the pane. The user asked for the preview over the main window instead, so it moved to the `AbovePrompt` band. The band spans the transcript's width, and the tree pane keeps the keyboard and drives it. The M5.0 spike was never needed.
+
+### 4.9 Later
 
 - Subagent awareness: files touched by a subagent shimmer in the `ide` color, and viewing an agent's transcript highlights that agent's files.
 - Digit hotkeys `1` to `9` on the first nine rows of the Changes view for one-key mentions.
@@ -250,7 +309,73 @@ h: ignored  r: refresh
 c: collapse  e: expand
 ```
 
-Drawn dim until the pane has the keyboard. It wraps to two rows at 32 columns and sits on one row from 46. v1.1 adds `f: filter  g: changes  z: focus`.
+Drawn dim until the pane has the keyboard. It wraps to two rows at 32 columns and sits on one row from 46. v1.1 adds `f: filter  g: changes  z: focus`. M5 adds `m: mention  o: editor  j: ↓  k: ↑`.
+
+### 5.7 Keyboard and preview (M5)
+
+The cursor in the tree, the pane focused (ctrl+x tab). This is the plugin's own folder as it stands; below the window come about 110 more rows: `skills/` fully expanded, then the root's `LICENSE` and `README.md`. `.claude-plugin` and `types` are folded by hand. The `▍` row is the cursor; the `▏` edge says the pane holds the keys:
+
+```
+▏agent-skills        esc to leave
+▏⎇ feat/tree-keys             ·1
+▏
+▏▾ claude/plugins/in-progress/tree
+▏│ ▸ .claude-plugin
+▏│ ▾ docs
+▏│ │   PRD.md                 M
+▏│ ▾ hooks
+▏│ │   anim.test.ts
+▏│ │   anim.ts
+▏│ │   color.test.ts
+▏│ │   color.ts
+▏│ │   find.test.ts
+▏│ │   find.ts
+▏│ │   git.test.ts
+▏│ │   git.ts
+▏│ │   hooks.json
+▏│ │   pane.test.tsx
+▏│ │   paths.ts
+▍│ │   register.tsx
+▏│ │   tree.test.ts
+▏│ │   tree.ts
+▏│ ▸ types
+▏│   .gitignore
+▏│   README.md
+▏────── ↓ 110 more ───────────────
+▏g: changes  f: find  z: focus
+▏h: ignored  r: refresh
+▏c: fold  e: unfold  m: mention
+▏o: editor  j: ↓  k: ↑
+```
+
+`j` and `k` move the `▍`. Enter on `▸ types` unfolds it with the ripple. Enter on `register.tsx` opens the preview in the band above the prompt, across the transcript's width, while the tree stays in the pane and keeps the keys:
+
+```
+┌ transcript ──────────────────────────────────────────────────┬ tree ─────────────────────────┐
+│ ● Updated the PRD.                                           │ agent-skills      esc to leave│
+│                                                              │ ‹ claude/…/register… below ↙  │
+│ ▍claude/…/hooks/register.tsx  1–10/1575   in the tree: … q   │ ▏│ │   paths.ts                │
+│    1  import { atom, read, update } from 'claude-code'       │ ▍│ │   register.tsx            │
+│    2  import type { Color, EngineInterface, Hook, PluginOp…  │ ▏│ │   tree.test.ts            │
+│    3                                                         │ ▏│ │   tree.ts                 │
+│    4  import type { ActiveFile, DirListing, FoldAnim, GitS…  │ ▏│ ▸ types                   │
+│    5  import { isDone, rowPhase, stepFor } from './anim'     │ ▏│   README.md               │
+│    6  import { BLACK, CLAUDE_ACCENT, feather, glassPalette…  │ ▏                             │
+│    7  import { fuzzyFilter } from './find'                   │ ▏q: back  m: mention          │
+│    8  import { EMPTY_GIT, GROUPS, parseIgnored, parseNumst…  │ ▏o: editor  j: ↓  k: ↑        │
+│ ↓ 1567 more                                                  │                               │
+│ >                                                            │                               │
+└──────────────────────────────────────────────────────────────┴───────────────────────────────┘
+```
+
+The code colors are the engine's highlighter, never the plugin's. `q` closes the band, with `▍` still on `register.tsx`. With `previewIn: pane` the same file draws inside the tree pane instead, on its glass, at its width.
+
+A binary or oversized file shows one note in place of the code:
+
+```
+│ ▍claude/…/tree/docs/screenshot.png         in the tree: j k ↑ ↓ PgUp PgDn scroll  q close │
+│ binary file (48 KB)                                                                     │
+```
 
 ## 6. Non-functional requirements
 
@@ -297,7 +422,8 @@ Drawn dim until the pane has the keyboard. It wraps to two rows at 32 columns an
 - In a fullscreen terminal of 144 columns or more, the pane is visible within 300 ms of session start with no user action.
 - During a multi-file edit, the person can name the file Claude is editing without reading the transcript.
 - After a turn, the changed files are identifiable from the pane alone (color and badge), matching `git status` exactly.
-- Clicking a row puts `@path ` in the composer in one action, every time the composer is free.
+- `m` on a row puts `@path ` in the composer in one action, every time the composer is free (a click did this before M5).
+- From ctrl+x tab, any file in view can be read in the preview with the arrows and Enter alone, without touching the mouse.
 - With the pane hidden, the debug log shows no plugin timer dispatches.
 
 ## 9. Milestones
@@ -311,7 +437,12 @@ Drawn dim until the pane has the keyboard. It wraps to two rows at 32 columns an
 | M3.5 Ship v1 | Tests on `terminal` and `desktop`, README, root `marketplace.json`, side setting stored, feature request filed. | `claude plugin test` is green; `/plugin install tree --marketplace jyerxa/agent-skills` works on a clean machine. |
 | M4 Views | Changes view, in-pane diff peek, fuzzy filter, focus mode, scroll cue. Built 2026-10-10. | `g` shows changed files with counts; `±` shows a diff; `f` finds; `z` prunes. |
 
-v1 is M0 through M4. Subagent awareness moved to "Later".
+| M5.0 Spike | Dropped during the build: the engine's docs settle it (§4.8, "Why the preview is drawn above the prompt"). | — |
+| M5.1 Cursor | F25: arrows and `j`/`k` through `ui.scroll` and hotkeys, the cursor kept in step with the focus ring, the window following it. Built 2026-10-10. | ↓ from the top walks every row of the tree to the bottom without the cursor ever leaving the window; Enter on a folder folds it. |
+| M5.2 Preview | F26 and F28: the `file` view in the band above the prompt (or the pane), paging, the notes for binary and large files, `/tree preview`. Built 2026-10-10. | Enter on `hooks/register.tsx` shows highlighted lines 1 to N with a gutter; PgDn reaches line 1575; `q` closes it with the cursor on the same row. |
+| M5.3 Mention and editor | F27: `m`, `o`, the `editor` and `previewIn` config rows, the README keys table. Built 2026-10-10. | `m` puts `@hooks/register.tsx ` in the composer; `o` from the preview opens VS Code at the top line in view. |
+
+v1 is M0 through M4. Subagent awareness moved to "Later". M5 is keyboard navigation and the preview.
 
 ## 10. Decision log
 
@@ -329,6 +460,10 @@ v1 is M0 through M4. Subagent awareness moved to "Later".
 | 2026-10-10 | Right and top margins removed at the user's request (left cell kept). Five visual pitches, all taken: indent guides, now-editing line, row highlight with focus mark, typographic hierarchy, readable paths. |
 | 2026-10-10 | Text padding restored on both sides; the gap outside the frame is the terminal's own. Delight pitches: ember glow (in), light pass (out), glass (parked), ripple on every fold and unfold (in). Focus cues added from the user's feedback: accent edge, accent title, `esc to leave` / `ctrl+x tab to focus`. |
 | 2026-10-10 | Glass taken off the parked list as a visual-only pass ("dusk": warm top, cool bottom, light as Claude's attention); behavior unchanged; config `glass` to turn the slab off. |
+| 2026-10-10 | M5, keyboard and preview. ↑/↓ and `j`/`k` move a row cursor that is the engine's focus ring. Space cannot be bound (hotkeys are one letter or digit), so Enter alone folds and unfolds; no extra `l`/`h` keys. |
+| 2026-10-10 | Click and Enter are one press to the engine, so both open the preview on a file. Mention moves to `m`, in the tree and as a key in the preview. This replaces the v1 decision that one click mentions. |
+| 2026-10-10 | The preview is wide, so it feels like plan mode. Planned as a second pane, but the engine refuses a new pane the keyboard while the person holds the tree. Built first as the tree pane's own view with the dock widened, but the dock ignored the width (seen live). By the user's ask it now draws over the main window: the band above the prompt, as wide as the transcript, driven from the tree pane (`previewIn: band`, default; `pane` keeps the in-pane view). `q` closes it, since Esc belongs to the engine. |
+| 2026-10-10 | Open in editor comes back as the keyboard-only `o` with a configurable `editor` command (default `code -g {path}:{line}`). The hover button stays skipped. GUI editors only. |
 
 ## Appendix A. Technical design
 
@@ -429,3 +564,74 @@ The `tool.call` hook must always reach `next(e)`; it carries `.catch(($, e, next
 - `claude plugin test claude/plugins/in-progress/tree`: the `tool.call` hook adds an active entry during `next` and a trail entry after; a porcelain v2 fixture parses to the expected state map including renames and conflicts; a render test mounts the pane on `terminal` and `desktop`, finds `row:a/b.ts`, presses it, and asserts the composer received `@a/b.ts `; folder counts and compact-folder chains; Windows and POSIX normalization.
 - Manual, in a 160-column fullscreen terminal with `--plugin-dir claude/plugins/in-progress/tree`: check that every entry `find . -path ./.git -prune -o -print` lists is on screen; ask Claude to edit a file and watch shimmer, reveal, trail and badge; press `h`, `r`, `c`; close with ctrl+x x and confirm it stays closed after a reload; reopen with `/tree`.
 - Idle check: with the pane hidden, `claude --debug` shows no plugin timer dispatches.
+
+### A.9 Keyboard and preview (M5)
+
+The engine rules from v1 still hold:
+- Every function that takes `$` is declared at the top level of `hooks/register.tsx`.
+- Every atom passed to `read` / `update` is declared there.
+- Tests observe writes with `on('state.set')` and answer `session.start` and `session.end` themselves.
+
+New session state (`types/index.d.ts`):
+
+```ts
+focused: string | null                 // (existing) the focus ring's element: now also the row cursor
+view: 'tree' | 'changes' | 'peek' | 'file'
+preview: Preview | null                // { path, text: string | null, note: string | null, back: PaneView, cursor: string | null }
+previewOffset: number                  // the preview window's first line, 0-based
+```
+
+`back` is the view the preview came from and `cursor` the row it left, both put back by `q`. Prefs never store `file`: the view under it is saved instead.
+
+New functions in `hooks/register.tsx`:
+
+| Function | Does |
+|---|---|
+| `moveCursor($, step \| 'first' \| 'last')` | Reads `loadView` and steps over the lines drawn as pressable rows (`row`, `change`, `match`). With no cursor yet, or one the wheel moved out of view, it lands on the first row in view (the last, going up). Writes `focused` and `offset` (a 2-row margin, via `offsetToShow`), then calls `$.ui.focus({ requestId: 'tree', key })` inside a try, as `toggleFilter` does. |
+| `showCursor($, key)` | After the person moves the ring (Tab, a click), scrolls the window to keep it inside the margin. |
+| `readPreview($, abs)` | `$.fs.stat`: over 1 MB → a note. `$.fs.read`: a NUL byte → the binary note; empty → `empty file`. Normalizes CRLF, tabs and control characters, and caps at 20,000 lines. A throw → `cannot read: …`. |
+| `openPreview($, path)` | `readPreview`, then writes `preview` (with `back` and `cursor`), `previewOffset: 0` and `view: 'file'`. |
+| `closePreview($)` | Back to `preview.back`, clears the preview, then puts `focused` and the ring back on `preview.cursor`. |
+| `drawBand($, e)` | The `AbovePrompt` hook, while `view` is `file` and `previewIn` is `band` (and no survey holds the band). Inside a `round` border in the accent with a cell of padding left and right, it draws a header row (`▍path`, the position, a hint cut to fit), a `Code` of `maxRows − 4` lines, and a cue row. The tree is never taller than `maxRows`, so the band shows it whole and never scrolls it. It sets `lastPreviewVisible`, which paging reads. Otherwise it answers `next(e)`. |
+| `loadView` | In the band mode, lays out the view under the preview (`preview.back`), so the pane keeps its rows. |
+| `scrollPreview($, by \| 'first' \| 'last')` | Moves `previewOffset`, clamped to the lines less the window. |
+| `rereadPreview($, path)` | After Claude writes `path` while it is previewed: reads it again, keeping the offset. |
+| `targetOf($)`, `mentionTarget($)`, `openTarget($)` | `m` and `o`: the previewed file, else the cursor's row (`f:` a file, `d:` a folder). `m` on a folder mentions `@folder/`; `o` on a folder toasts. |
+| `openInEditor($, path, line)` | `splitCommand(cfg.editor)` (double quotes keep a part whole), then fills in `{path}` (absolute, backslashes on Windows) and `{line}`. On a Windows root, an `argv[0]` with no extension becomes `['cmd', '/c', ...]`. Runs `$.process.run(argv, { cwd: root, timeoutMs: 10_000 })`; a non-zero exit or a throw → toast. |
+| `drawPane` (the `file` branch) | The header's second row is `‹ path` (a Button back) and the position. The body is one `<Code source={the window's lines} path={path} startLine={offset + 1} wrap="truncate-end" />` in a Box of the window's height, with columns of edge cells, the scrollbar and right-edge cells beside it, each cell on its own row's glass. A note stands in for the text when there is none. The preview always owns its window, docked or inline, and keeps the hidden trailing row so the scroll keys stay live. |
+
+Hook changes:
+
+| Hook | Change |
+|---|---|
+| `ui.scroll` `{ requestId: 'tree' }` | `\|by\| > bodyRows` is Home or End, `\|by\| === bodyRows` a page, anything less rows. In the `file` view every move goes to `scrollPreview`. Otherwise, docked: the person's move with no `pointer` (a key) → `moveCursor`; with one (the wheel) → `scrollBy` as before. Inline, the tree leaves the move to the engine. |
+| `ui.focus` `{ requestId: 'tree' }` | Writes `focused`, then `showCursor` after the person's move. |
+| `ui.close` `{ id: 'tree' }` | A preview does not outlive the pane: the view goes back to the one under it. |
+| `tool.call` (writes) | Also `rereadPreview` for the written file. |
+| `command.run` `tree` | `preview <path>` → `openPreview` (opening the pane first). |
+| Row presses | `press(row)` on a file, `drawChange`'s and `drawMatch`'s row presses, and the filter's `onSubmit` call `openPreview`. Folders still call `toggleDir`. `±` still opens the diff peek. |
+| Legend | In the tree, Changes and filter views: `m: mention`, `o: editor`, `j: ↓`, `k: ↑`. In the `file` view: `q: back`, `m`, `o`, `j`, `k`. |
+| `ui.render` `{ component: 'AbovePrompt' }` | `drawBand`, else `next(e)`. |
+| `ui.scroll` `{ component: 'AbovePrompt' }` | While the band shows the file: `scrollPreview(by)`. |
+| `readConfig` / `plugin.json` | `editor` (string) and `previewIn` (`band` or `pane`) as `userConfig` rows. |
+
+Tests (`hooks/pane.test.tsx`), 57 green in all:
+- Scroll keys (a person's move with no pointer) and `j`/`k` move the cursor; the window follows it down and back up; the cursor stops at the last row.
+- The wheel moves `offset` and leaves the cursor; Home and End go to the first and last rows.
+- Enter on a folder starts the fold.
+- Band: Enter on a file draws a `Code` of 8 lines in a 12-row band, framed in the accent (`1–8/50`, `↓ 42 more`) while the pane keeps its rows and shows `below ↙`. PgDn in the pane pages the band to line 8 and `j` moves it to 9. The wheel over the band scrolls the file; the wheel over the pane doesn't. `q` empties the band and puts the cursor back.
+- Pane (`previewIn: pane`): Enter on a file draws a `Code` of exactly the window's 14 lines from `startLine: 1`, `wrap: 'truncate-end'`, with `1–14/50` and `↓ 36 more`.
+- PgDn pages to line 14, `j` to 15, End shows `37–50/50`.
+- `q` restores the cursor on the row and the dock to 32.
+- A NUL byte draws the binary note and no `Code`.
+- `m` mentions the previewed file, and a folder as `@skills/a/ `.
+- `o` runs `['code', '-g', '/repo/README.md:1']`; a configured `subl "{path}:{line}" --wait` keeps its quoted part whole.
+- `/tree preview <path>` opens the preview.
+- The v1 tests now expect a click, the Changes view's row and the filter's Enter to preview rather than mention, and the wheel tests pass a pointer.
+
+Manual, in `/tui fullscreen` after `/reload-plugins`:
+- ctrl+x tab, then ↓ and `j` through `hooks/`.
+- Enter on `▸ types`, then Enter on `register.tsx`.
+- PgDn to the end of the preview, then `m`, then `o`, then `q`. The cursor should be back on `register.tsx`, and the dock back at 32 columns.
+- Confirm the two engine behaviours the tests cannot show: ↑/↓ arrive as scroll moves with no pointer, and a re-open's `columns` resizes the dock.
+- Send the user a screenshot of each state to judge.

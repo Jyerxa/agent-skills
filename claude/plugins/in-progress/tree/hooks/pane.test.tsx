@@ -30,8 +30,11 @@ const PANE_PROPS = {
 
 type Write = { key: string; value: unknown }
 
+/** What a test reads back from beneath the plugin, and what it hands it: the text any file reads as. */
+type Spy = { text?: string; argv?: string[][]; opens?: { columns?: number }[] }
+
 /** The world beneath the plugin: a clock and store in memory, a fake repo on disk, git answered from fixtures. */
-const world = (on: On, filled: string[], writes: Write[], stored: Record<string, unknown>) => {
+const world = (on: On, filled: string[], writes: Write[], stored: Record<string, unknown>, spy: Spy = {}) => {
   on('state.set', { plugin: 'tree' }, ($, e, next) => {
     writes.push({ key: e.key, value: e.value })
     return next(e)
@@ -54,10 +57,18 @@ const world = (on: On, filled: string[], writes: Write[], stored: Record<string,
   on('session.root', () => ({ value: ROOT }))
   on('session.id', () => ({ value: 'session-1' }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.open', ($, e) => {
+    spy.opens?.push({ columns: e.columns })
+    return { value: { isPlaced: true as const } }
+  })
   on('ui.close', () => ({ value: undefined }))
   on('ui.panes', () => ({ value: [{ id: 'tree', title: 'tree', isShown: true, isFocused: false, isPlaced: true }] }))
   on('ui.scroll', () => ({}))
+  // the band as the engine leaves it with no survey up: empty
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
   on('ui.focus', () => ({}))
   on('ui.toast', () => ({ value: undefined }))
   on('env.get', () => ({ value: undefined }))
@@ -65,8 +76,9 @@ const world = (on: On, filled: string[], writes: Write[], stored: Record<string,
   const posix = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
   on('fs.list', ($, e) => ({ value: (FILES[posix(e.path)] ?? []).map(x => ({ ...x, size: 0, mtimeMs: 0, isLink: false })) }))
   on('fs.stat', () => ({ value: { kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false } }))
-  on('fs.read', () => ({ value: 'one\ntwo\n' }))
+  on('fs.read', () => ({ value: spy.text ?? 'one\ntwo\n' }))
   on('process.run', ($, e) => {
+    spy.argv?.push([...e.argv])
     const sub = e.argv[1]
     const isNumstat = e.argv.includes('--numstat')
     const stdout = sub === 'rev-parse' ? '\n' : sub === 'status' ? STATUS : sub === 'diff' ? (isNumstat ? NUMSTAT : DIFF) : ''
@@ -87,11 +99,16 @@ const start = async ($: Engine) => {
 
 const mountTree = ($: Engine, props = PANE_PROPS) => $.ui.mount({ plugin: 'tree', surface: 'terminal', component: 'Pane', requestId: 'tree', props })
 
+/** The band above the prompt, 12 rows and 120 columns: its border, a header row, 8 lines of the file, a cue row. */
+const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 12, bodyColumns: 120, scroll: { offset: 0, bodyRows: 11 }, view: {} }
+
+const mountBand = ($: Engine, surface: 'terminal' | 'desktop' = 'terminal') =>
+  $.ui.mount({ plugin: 'tree', surface, component: 'AbovePrompt', requestId: 'band', props: BAND_PROPS })
+
 const lastWrite = (writes: Write[], key: string): unknown => writes.filter(w => w.key === key).at(-1)?.value
 
-test('draws the whole working directory expanded with git badges, and a click mentions the file', async ($, on) => {
-  const filled: string[] = []
-  world(on, filled, [], {})
+test('draws the whole working directory expanded with git badges, and a click previews the file', async ($, on) => {
+  world(on, [], [], {})
   await start($)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'tree', surface, component: 'Pane', requestId: 'tree', props: PANE_PROPS })
@@ -104,7 +121,15 @@ test('draws the whole working directory expanded with git badges, and a click me
     expect(await ui.find({ type: 'Text', text: '·1' }), `${surface}: dirty count`).toBeDefined()
     expect((await ui.find({ type: 'Text', text: 'M' }))?.props['color'], `${surface}: modified badge color`).toBe('warning')
     await ui.press({ key: 'f:README.md' })
-    expect(filled.at(-1), `${surface}: click inserts a mention`).toBe('@README.md ')
+    const band = await mountBand($, surface)
+    const code = await band.find({ type: 'Code' })
+    expect(code?.props['source'], `${surface}: a click previews the file above the prompt`).toBe('one\ntwo')
+    expect(code?.props['path']).toBe('README.md')
+    expect(await ui.find({ key: 'f:README.md' }), `${surface}: the tree stays in the pane`).toBeDefined()
+    await ui.press({ key: 'act:close' })
+    expect(await band.find({ type: 'Code' }), `${surface}: q takes the preview away`).toBeUndefined()
+    await band.unmount()
+    expect(await ui.find({ key: 'f:README.md' }), `${surface}: q goes back to the tree`).toBeDefined()
     await ui.unmount()
   }
 })
@@ -158,7 +183,21 @@ test('the legend is always drawn and sits under the rows, dim until the pane has
   await start($)
   const ui = await mountTree($)
   const buttons = await ui.findAll({ type: 'Button' })
-  expect(buttons.map(b => b.key).slice(-7)).toEqual(['act:changes', 'act:filter', 'act:focus', 'act:ignored', 'act:refresh', 'act:collapse', 'act:expand'])
+  expect(buttons.map(b => b.key).slice(-11)).toEqual([
+    'act:changes',
+    'act:filter',
+    'act:focus',
+    'act:ignored',
+    'act:refresh',
+    'act:collapse',
+    'act:expand',
+    'act:mention',
+    'act:open',
+    'act:down',
+    'act:up',
+  ])
+  expect((await ui.find({ key: 'act:down' }))?.props['hotkey']).toBe('j')
+  expect((await ui.find({ key: 'act:up' }))?.props['hotkey']).toBe('k')
   expect((await ui.find({ key: 'act:refresh' }))?.props['dimColor']).toBe(true)
   expect((await ui.find({ key: 'act:refresh' }))?.props['hotkey']).toBe('r')
   await ui.unmount()
@@ -171,9 +210,9 @@ test('docked, the pane scrolls its own window with edge cues: rows move, the hea
   // the cues sit in the blank rows under the header and above the legend
   world(on, [], [], {})
   await start($)
-  // body of 9 rows at 32 columns (30 after side padding): title 1, branch 1, blank 1, 2 rows of tree, blank 1,
-  // legend 3 ("g: changes  f: find  z: focus" / "h: ignored  r: refresh" / "c: fold  e: unfold")
-  const props = { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 9 } }
+  // body of 10 rows at 32 columns (30 after side padding): title 1, branch 1, blank 1, 2 rows of tree, blank 1,
+  // legend 4 ("g: changes  f: find  z: focus" / "h: ignored  r: refresh" / "c: fold  e: unfold  m: mention" / "o: editor  j: ↓  k: ↑")
+  const props = { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 10 } }
   const ui = await mountTree($, props)
   expect(await ui.find({ key: 'd:skills/a' })).toBeDefined()
   expect(await ui.find({ key: 'f:skills/a/SKILL.md' })).toBeDefined()
@@ -182,21 +221,22 @@ test('docked, the pane scrolls its own window with edge cues: rows move, the hea
   expect(await ui.find({ type: 'Text', text: '↑' }), 'no top cue at the top').toBeUndefined()
   expect(await ui.find({ type: 'Text', text: '┃' }), 'scrollbar thumb').toBeDefined()
   expect(await ui.find({ key: 'act:expand' }), 'legend drawn even though rows overflow').toBeDefined()
-  const scroll = (by: number) => $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by, bodyRows: 9, contentRows: 10, origin: { kind: 'person' } })
+  // the wheel, over the body: it scrolls (keys, with no pointer, move the cursor instead)
+  const scroll = (by: number) =>
+    $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by, bodyRows: 10, contentRows: 11, origin: { kind: 'person' }, pointer: { column: 4, row: 0 } })
   await scroll(1)
   expect(await ui.find({ key: 'd:skills/a' }), 'first row scrolled out').toBeUndefined()
   expect(await ui.find({ key: 'f:README.md' }), 'third row scrolled in').toBeDefined()
   expect(await ui.find({ type: 'Text', text: '↑ 1 more' }), 'top edge cue').toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'repo' }), 'title stays').toBeDefined()
   expect(await ui.find({ type: 'Text', text: '⎇ main' }), 'branch row stays').toBeDefined()
-  await scroll(-10)
-  expect(await ui.find({ key: 'd:skills/a' }), 'Home jumps back to the top').toBeDefined()
+  await scroll(-20)
+  expect(await ui.find({ key: 'd:skills/a' }), 'a big move jumps back to the top').toBeDefined()
   await ui.unmount()
 })
 
-test('the Changes view groups changed files with line counts, and ± peeks the diff', async ($, on) => {
-  const filled: string[] = []
-  world(on, filled, [], {})
+test('the Changes view groups changed files with line counts, a press previews one, and ± peeks the diff', async ($, on) => {
+  world(on, [], [], {})
   await start($)
   const ui = await mountTree($)
   await ui.press({ key: 'act:changes' })
@@ -206,7 +246,12 @@ test('the Changes view groups changed files with line counts, and ± peeks the d
   expect(await ui.find({ type: 'Text', text: '+3 −1' }), 'line counts').toBeDefined()
   expect((await ui.find({ key: 'act:changes' }))?.text, 'legend offers the way back').toBe('tree')
   await ui.press({ key: 'f:README.md' })
-  expect(filled.at(-1)).toBe('@README.md ')
+  const band = await mountBand($)
+  expect((await band.find({ type: 'Code' }))?.props['path'], 'the row previews the file').toBe('README.md')
+  await band.unmount()
+  expect(await ui.find({ type: 'Text', text: 'Modified' }), 'the changes stay in the pane while it shows').toBeDefined()
+  await ui.press({ key: 'act:close' })
+  expect(await ui.find({ type: 'Text', text: 'Modified' }), 'q goes back to the changes').toBeDefined()
   await ui.press({ key: 'pk:README.md' })
   expect((await ui.find({ type: 'Text', text: '+new line' }))?.props['color'], 'added line colored').toBe('diffAdded')
   expect((await ui.find({ type: 'Text', text: '-old line' }))?.props['color'], 'removed line colored').toBe('diffRemoved')
@@ -218,9 +263,8 @@ test('the Changes view groups changed files with line counts, and ± peeks the d
   await ui.unmount()
 })
 
-test('the filter narrows the tree with fuzzy matching, highlights the hits, and Enter mentions the best one', async ($, on) => {
-  const filled: string[] = []
-  world(on, filled, [], {})
+test('the filter narrows the tree with fuzzy matching, highlights the hits, and Enter previews the best one', async ($, on) => {
+  world(on, [], [], {})
   await start($)
   const ui = await mountTree($)
   await ui.press({ key: 'act:filter' })
@@ -230,7 +274,11 @@ test('the filter narrows the tree with fuzzy matching, highlights the hits, and 
   expect(await ui.find({ key: 'f:README.md' }), 'non-match dropped').toBeUndefined()
   expect((await ui.find({ type: 'Text', text: 'SK' }))?.props['color'], 'hit highlighted, in the file name rather than the folder').toBe('claude')
   await ui.input({ key: 'filter', text: 'skl' })
-  expect(filled.at(-1), 'Enter mentions the best match').toBe('@skills/a/SKILL.md ')
+  const band = await mountBand($)
+  expect((await band.find({ type: 'Code' }))?.props['path'], 'Enter previews the best match').toBe('skills/a/SKILL.md')
+  await band.unmount()
+  await ui.press({ key: 'act:close' })
+  expect(await ui.find({ type: 'Input', key: 'filter' }), 'q goes back to the filter as it was').toBeDefined()
   await ui.press({ key: 'act:clear' })
   expect(await ui.find({ type: 'Input', key: 'filter' }), 'cleared').toBeUndefined()
   expect(await ui.find({ key: 'f:README.md' }), 'tree is back').toBeDefined()
@@ -320,4 +368,151 @@ test('a file outside the project is still shown, under its own heading', async (
   expect(await ui.find({ type: 'Text', text: 'outside project' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '/elsewhere/notes.md' })).toBeDefined()
   await ui.unmount()
+})
+
+/** A scroll key as the engine sends it to a focused pane: the person's, with no pointer cell. */
+const pressKey = ($: Engine, by: number, bodyRows: number) =>
+  $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by, bodyRows, contentRows: bodyRows + 1, origin: { kind: 'person' } })
+
+test('arrow keys and j/k move the row cursor, the window follows it, and the wheel only scrolls', async ($, on) => {
+  const writes: Write[] = []
+  world(on, [], writes, {})
+  await start($)
+  // body of 10 rows: two lines of tree in the window (see the scroll test above)
+  const props = { ...PANE_PROPS, isFocused: true, scroll: { offset: 0, bodyRows: 10 } }
+  const ui = await mountTree($, props)
+  await pressKey($, 1, 10)
+  expect(lastWrite(writes, 'focused'), 'the first key lands on the first row in view').toBe('d:skills/a')
+  await pressKey($, 1, 10)
+  expect(lastWrite(writes, 'focused')).toBe('f:skills/a/SKILL.md')
+  expect(await ui.find({ type: 'Text', text: '▍' }), 'the cursor mark').toBeDefined()
+  await pressKey($, 1, 10)
+  expect(lastWrite(writes, 'focused')).toBe('f:README.md')
+  expect(await ui.find({ key: 'f:README.md' }), 'the window followed the cursor down').toBeDefined()
+  expect(await ui.find({ key: 'd:skills/a' }), 'and the top row left it').toBeUndefined()
+  await pressKey($, 1, 10)
+  expect(lastWrite(writes, 'focused'), 'the cursor stops at the last row').toBe('f:README.md')
+  await ui.press({ key: 'act:up' })
+  expect(lastWrite(writes, 'focused'), 'k goes up').toBe('f:skills/a/SKILL.md')
+  await ui.press({ key: 'act:up' })
+  expect(lastWrite(writes, 'focused')).toBe('d:skills/a')
+  expect(await ui.find({ key: 'd:skills/a' }), 'the window followed it back up').toBeDefined()
+  await ui.press({ key: 'act:down' })
+  expect(lastWrite(writes, 'focused'), 'j goes down').toBe('f:skills/a/SKILL.md')
+  await $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by: 1, bodyRows: 10, contentRows: 11, origin: { kind: 'person' }, pointer: { column: 4, row: 0 } })
+  expect(lastWrite(writes, 'focused'), 'the wheel leaves the cursor').toBe('f:skills/a/SKILL.md')
+  expect(lastWrite(writes, 'offset'), 'and scrolls the window').toBe(1)
+  await pressKey($, -20, 10)
+  expect(lastWrite(writes, 'focused'), 'Home goes to the first row').toBe('d:skills/a')
+  await pressKey($, 20, 10)
+  expect(lastWrite(writes, 'focused'), 'End to the last').toBe('f:README.md')
+  await ui.unmount()
+})
+
+const FIFTY = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
+
+test('the preview above the prompt is as wide as the transcript and scrolls from the tree pane, which keeps its rows', async ($, on) => {
+  const writes: Write[] = []
+  world(on, [], writes, {}, { text: FIFTY })
+  await start($)
+  const ui = await mountTree($, { ...PANE_PROPS, isFocused: true, scroll: { offset: 0, bodyRows: 20 } })
+  await $.ui.focus({ component: 'Pane', requestId: 'tree', plugin: 'tree', element: 'f:README.md', origin: { kind: 'person' } })
+  await ui.press({ key: 'f:README.md' })
+  const band = await mountBand($)
+  const code = await band.find({ type: 'Code' })
+  expect(String(code?.props['source']).split('\n').length, 'the band height less its border, header and cue').toBe(8)
+  expect(code?.props['startLine']).toBe(1)
+  expect(await band.find({ type: 'Text', text: '1–8/50' }), 'where the window is').toBeDefined()
+  expect(await band.find({ type: 'Text', text: '↓ 42 more' })).toBeDefined()
+  const frame = (await band.findAll({ type: 'Box' })).find(b => b.props['borderStyle'] === 'round')
+  expect(frame?.props['borderColor'], 'framed in the accent').toBe('#d97757')
+  expect(await ui.find({ key: 'f:README.md' }), 'the pane keeps the tree').toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'below ↙' }), 'and points at the band').toBeDefined()
+  await pressKey($, 20, 20)
+  expect((await band.find({ type: 'Code' }))?.props['startLine'], 'PgDn in the pane pages the band').toBe(8)
+  await ui.press({ key: 'act:down' })
+  expect((await band.find({ type: 'Code' }))?.props['startLine'], 'j a line').toBe(9)
+  await $.ui.scroll({ component: 'AbovePrompt', requestId: 'band', offset: 0, by: 3, bodyRows: 11, contentRows: 12, origin: { kind: 'person' }, pointer: { column: 10, row: 3 } })
+  expect((await band.find({ type: 'Code' }))?.props['startLine'], 'the wheel over the band scrolls it').toBe(12)
+  await $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by: 1, bodyRows: 20, contentRows: 21, origin: { kind: 'person' }, pointer: { column: 4, row: 0 } })
+  expect((await band.find({ type: 'Code' }))?.props['startLine'], 'the wheel over the pane leaves the file').toBe(12)
+  await ui.press({ key: 'act:close' })
+  expect(await band.find({ type: 'Code' }), 'q takes it away').toBeUndefined()
+  expect(lastWrite(writes, 'focused'), 'the cursor is back on the row it left').toBe('f:README.md')
+  await band.unmount()
+  await ui.unmount()
+})
+
+test('Enter on a folder folds it; on a file, with the preview in the pane, it shows the file there, pages it, and q goes back to the same row', { options: { previewIn: 'pane' } }, async ($, on) => {
+  const writes: Write[] = []
+  const spy: Spy = { text: FIFTY }
+  world(on, [], writes, {}, spy)
+  await start($)
+  // body of 20 rows in the preview: title 1, file row 1, blank 1, 14 lines, blank 1, legend 2 ("q: back  m: mention  o: editor" / "j: ↓  k: ↑")
+  const props = { ...PANE_PROPS, isFocused: true, scroll: { offset: 0, bodyRows: 20 } }
+  const ui = await mountTree($, props)
+  await pressKey($, 1, 20)
+  await ui.press({ key: 'd:skills/a' }) // Enter presses the row the cursor is on
+  expect((lastWrite(writes, 'anim') as { kind: string } | null)?.kind, 'Enter on a folder folds it').toBe('fold')
+  await $.ui.focus({ component: 'Pane', requestId: 'tree', plugin: 'tree', element: 'f:README.md', origin: { kind: 'person' } })
+  await ui.press({ key: 'f:README.md' })
+  const code = await ui.find({ type: 'Code' })
+  expect(code?.props['startLine'], 'numbered from the top').toBe(1)
+  expect(String(code?.props['source']).split('\n').length, 'only the window is drawn').toBe(14)
+  expect(code?.props['wrap'], 'a line is a row').toBe('truncate-end')
+  expect(await ui.find({ type: 'Text', text: '1–14/50' }), 'where the window is').toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '↓ 36 more' }), 'the lines below').toBeDefined()
+  await pressKey($, 20, 20)
+  expect((await ui.find({ type: 'Code' }))?.props['startLine'], 'PgDn pages').toBe(14)
+  await ui.press({ key: 'act:down' })
+  expect((await ui.find({ type: 'Code' }))?.props['startLine'], 'j a line').toBe(15)
+  await pressKey($, 100, 20)
+  expect(await ui.find({ type: 'Text', text: '37–50/50' }), 'End shows the last lines').toBeDefined()
+  await ui.press({ key: 'act:close' })
+  expect(await ui.find({ type: 'Code' }), 'the preview is gone').toBeUndefined()
+  expect(lastWrite(writes, 'focused'), 'the cursor is back on the row it left').toBe('f:README.md')
+  await ui.unmount()
+})
+
+test('a binary file shows a note; m mentions it and o opens it in the editor', async ($, on) => {
+  const filled: string[] = []
+  const spy: Spy = { text: 'PNG\0data', argv: [] }
+  world(on, filled, [], {}, spy)
+  await start($)
+  const ui = await mountTree($, { ...PANE_PROPS, isFocused: true })
+  await ui.press({ key: 'f:README.md' })
+  const band = await mountBand($)
+  expect(await band.find({ type: 'Text', text: /^binary file/ }), 'a note instead of the text').toBeDefined()
+  expect(await band.find({ type: 'Code' })).toBeUndefined()
+  await band.unmount()
+  await ui.press({ key: 'act:mention' })
+  expect(filled.at(-1), 'm mentions the previewed file').toBe('@README.md ')
+  await ui.press({ key: 'act:open' })
+  expect(spy.argv?.at(-1), 'o runs the editor at the top line').toEqual(['code', '-g', '/repo/README.md:1'])
+  await ui.press({ key: 'act:close' })
+  await $.ui.focus({ component: 'Pane', requestId: 'tree', plugin: 'tree', element: 'd:skills/a', origin: { kind: 'person' } })
+  await ui.press({ key: 'act:mention' })
+  expect(filled.at(-1), 'm on a folder mentions the folder').toBe('@skills/a/ ')
+  await ui.unmount()
+})
+
+test('the editor command is configurable, with a quoted part kept whole', { options: { editor: 'subl "{path}:{line}" --wait' } }, async ($, on) => {
+  const spy: Spy = { argv: [] }
+  world(on, [], [], {}, spy)
+  await start($)
+  const ui = await mountTree($, { ...PANE_PROPS, isFocused: true })
+  await $.ui.focus({ component: 'Pane', requestId: 'tree', plugin: 'tree', element: 'f:README.md', origin: { kind: 'person' } })
+  await ui.press({ key: 'act:open' })
+  expect(spy.argv?.at(-1)).toEqual(['subl', '/repo/README.md:1', '--wait'])
+  await ui.unmount()
+})
+
+test('/tree preview <path> opens the preview from the prompt', async ($, on) => {
+  world(on, [], [], {})
+  await start($)
+  const ran = await $.command.run({ command: 'tree', args: 'preview skills/a/SKILL.md', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+  expect(ran.text).toBe('tree: previewing skills/a/SKILL.md.')
+  const band = await mountBand($)
+  expect((await band.find({ type: 'Code' }))?.props['path']).toBe('skills/a/SKILL.md')
+  await band.unmount()
 })
