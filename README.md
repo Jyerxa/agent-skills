@@ -32,9 +32,9 @@ globally with `-g`).
 
 | Skill | Description |
 | --- | --- |
-| [`capture-process`](skills/capture-process) | Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
-| [`visualize-process`](skills/visualize-process) | Turn a captured process into a portable, animated HTML explorer with case walkthroughs, inspectable evidence and relationships, and visible uncertainty. |
-| [`improve-process`](skills/improve-process) | Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
+| [`capture-process`](skills/in-progress/capture-process) | Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
+| [`visualize-process`](skills/in-progress/visualize-process) | Turn a captured process into a portable, animated HTML explorer with case walkthroughs, inspectable evidence and relationships, and visible uncertainty. |
+| [`improve-process`](skills/in-progress/improve-process) | Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
 | [`system-discovery`](skills/system-discovery) | Guide an interview from a rough software idea to a system brief covering purpose, users, workflows, responsibilities, rules, and scope - ready to inform codebase design. |
 | [`pattern-design`](skills/pattern-design) | Turn a system design spec or PRD into a disciplined pattern-based design — which patterns to apply, where, why — plus repo-ready agent instructions that enforce it. |
 | [`jy-codebase-analysis`](skills/jy-codebase-analysis) | Deep, evidence-backed analysis of an existing codebase: an orchestrator surveys the repo and fans out subagents to read every file, then synthesizes a business overview, a business-logic catalog (calculations captured as business rules), an architecture overview with Mermaid diagrams, and a layer-by-layer engineering-patterns report. Works in Claude Code, Cursor, Codex, and Copilot. |
@@ -51,9 +51,9 @@ changes against it. Neither consumer fills gaps or overwrites the baseline.
 Each skill can be installed on its own; consumers bundle the shared contract.
 `system-discovery` remains a separate workflow for defining a software system.
 
-The fictional workshop example includes a [capture](skills/capture-process/fixtures/workshop-process.md),
-an [offline animated viewer](skills/visualize-process/fixtures/workshop.html), and
-a [conditional improvement assessment](skills/improve-process/fixtures/workshop-improvements.md).
+The fictional workshop example includes a [capture](skills/in-progress/capture-process/fixtures/workshop-process.md),
+an [offline animated viewer](skills/in-progress/visualize-process/fixtures/workshop.html), and
+a [conditional improvement assessment](skills/in-progress/improve-process/fixtures/workshop-improvements.md).
 Download the HTML and open it locally; no site or server is required.
 
 ## Plugins
