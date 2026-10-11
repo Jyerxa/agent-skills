@@ -1,0 +1,242 @@
+{
+  "format": "process-view/v1",
+  "model_id": "workshop-bike-intake",
+  "revision": 1,
+  "sha256": "560868aeab1ba9e774cf0db7b91e8359e2de50f517c3ec44152912b1552bf03c",
+  "scenarios": [
+    {
+      "id": "scenario-ordinary",
+      "mode": "case-trace",
+      "frames": [
+        {
+          "focus": [
+            "action-open-ticket"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-inspect"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-check-parts"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-prepare-quote"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-decide-quote"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-repair"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-mark-ready"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-notify"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-collect"
+          ],
+          "basis": [
+            {
+              "id": "scenario-ordinary",
+              "field": "Meaning"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scenario-declined",
+      "mode": "guided-reading",
+      "frames": [
+        {
+          "focus": [
+            "action-inspect",
+            "action-check-parts"
+          ],
+          "basis": [
+            {
+              "id": "rule-quote-prerequisites",
+              "field": "Meaning"
+            },
+            {
+              "id": "q-check-order",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-decide-quote"
+          ],
+          "basis": [
+            {
+              "id": "scenario-declined",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-arrange-unrepaired-collection"
+          ],
+          "basis": [
+            {
+              "id": "scenario-declined",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "action-collect"
+          ],
+          "basis": [
+            {
+              "id": "scenario-declined",
+              "field": "Meaning"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scenario-early-repair",
+      "mode": "guided-reading",
+      "frames": [
+        {
+          "focus": [
+            "action-repair"
+          ],
+          "basis": [
+            {
+              "id": "scenario-early-repair",
+              "field": "Meaning"
+            }
+          ]
+        },
+        {
+          "focus": [
+            "rule-accept-before-repair"
+          ],
+          "basis": [
+            {
+              "id": "scenario-early-repair",
+              "field": "Meaning"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "action-open-ticket",
+      "to": "action-inspect",
+      "relation": "precedes",
+      "basis": [
+        {
+          "id": "rule-quote-prerequisites",
+          "field": "Meaning"
+        }
+      ]
+    },
+    {
+      "from": "action-open-ticket",
+      "to": "action-check-parts",
+      "relation": "precedes",
+      "basis": [
+        {
+          "id": "rule-quote-prerequisites",
+          "field": "Meaning"
+        }
+      ]
+    },
+    {
+      "from": "action-inspect",
+      "to": "action-prepare-quote",
+      "relation": "prerequisite for",
+      "basis": [
+        {
+          "id": "rule-quote-prerequisites",
+          "field": "Meaning"
+        }
+      ]
+    },
+    {
+      "from": "action-check-parts",
+      "to": "action-prepare-quote",
+      "relation": "prerequisite for",
+      "basis": [
+        {
+          "id": "rule-quote-prerequisites",
+          "field": "Meaning"
+        }
+      ]
+    }
+  ]
+}

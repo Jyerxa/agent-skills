@@ -1,0 +1,41 @@
+name: Process skills checks
+on:
+  pull_request:
+    paths:
+      - 'skills/capture-process/**'
+      - 'skills/visualize-process/**'
+      - 'skills/improve-process/**'
+      - '.github/workflows/process-viewer.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate capture, visualization, and improvement
+        run: |
+          python3 -m unittest discover -s skills/capture-process/scripts -p 'test_*.py' -v
+          python3 -m unittest discover -s skills/visualize-process/scripts -p 'test_*.py' -v
+          python3 -m unittest discover -s skills/improve-process/scripts -p 'test_*.py' -v
+          python3 skills/improve-process/scripts/validate_proposals.py skills/improve-process/fixtures/workshop-improvements.md --baseline skills/capture-process/fixtures/workshop-process.md
+          python3 skills/visualize-process/scripts/render_process.py skills/capture-process/fixtures/workshop-process.md --view skills/visualize-process/fixtures/workshop.view.json --output /tmp/workshop.html
+          cmp /tmp/workshop.html skills/visualize-process/fixtures/workshop.html
+      - name: Install development-only browser test dependency
+        run: |
+          npm install --prefix /tmp/process-viewer-test --no-audit --no-fund playwright-core@1.63.0
+          /tmp/process-viewer-test/node_modules/.bin/playwright-core install --with-deps chromium
+      - name: Exercise portable HTML in Chromium
+        env:
+          NODE_PATH: /tmp/process-viewer-test/node_modules
+        run: node skills/visualize-process/scripts/test_viewer.cjs /tmp/workshop.html viewer-test-artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: process-viewer-browser-evidence
+          path: viewer-test-artifacts/
+          retention-days: 7
