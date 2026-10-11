@@ -1,12 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Hook, PluginOptions, Register, RenderElement, RenderInput, Timer } from 'claude-code'
 
-import type { ActiveFile, DirListing, FoldAnim, GitSnapshot, GitState, LineCounts, PaneView } from '../types'
+import type { ActiveFile, DirListing, FoldAnim, GitSnapshot, GitState, LineCounts, PaneView, Preview } from '../types'
 import { isDone, rowPhase, stepFor } from './anim'
 import { BLACK, CLAUDE_ACCENT, feather, glassPalette, glassRow, glowOver, glowWeight, gradientRuns, mix, parseHex, ramp, smoothstep, sweepAt, toHex, WHITE, type Rgb } from './color'
 import { fuzzyFilter } from './find'
 import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus } from './git'
-import { ancestorsOf, baseName, cells, join, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
+import { ancestorsOf, baseName, cells, isWindowsPath, join, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
 import { allDirs, allFiles, flatten, type Row } from './tree'
 
 const PANE = 'tree'
@@ -36,6 +36,15 @@ const SHIMMER_TAIL_MS = 600
 const ANIM_FRAME_MS = 33
 /** the breathing glyph's frames, one per three shimmer ticks */
 const BREATH = ['●', '◉', '○']
+/** rows the cursor keeps between itself and the window's edge while there are rows beyond */
+const CURSOR_MARGIN = 2
+/** the preview reads a file up to this size, and shows up to this many lines of it */
+const PREVIEW_MAX_BYTES = 1_000_000
+const PREVIEW_MAX_LINES = 20_000
+const EDITOR_TIMEOUT_MS = 10_000
+/** the preview band's frame: one cell of border on each edge, and one of room inside it left and right */
+const BAND_BORDER = 1
+const BAND_PAD_X = 1
 
 // ---------- session state, held by the engine (survives a hot reload); declared in ../types ----------
 
@@ -59,6 +68,8 @@ const peekDiffAtom = atom({ plugin: 'tree', key: 'peekDiff' } as const, '')
 const focusedAtom = atom({ plugin: 'tree', key: 'focused' } as const, null as string | null)
 const animAtom = atom({ plugin: 'tree', key: 'anim' } as const, null as FoldAnim | null)
 const frameAtom = atom({ plugin: 'tree', key: 'frame' } as const, 0)
+const previewAtom = atom({ plugin: 'tree', key: 'preview' } as const, null as Preview | null)
+const previewOffsetAtom = atom({ plugin: 'tree', key: 'previewOffset' } as const, 0)
 
 export type Config = {
   side: 'left' | 'right'
@@ -74,6 +85,9 @@ export type Config = {
   glow: boolean
   glass: boolean
   animate: boolean
+  editor: string
+  /** where a file preview draws: the band above the prompt, as wide as the transcript, or inside the tree pane */
+  previewIn: 'band' | 'pane'
 }
 
 type Dollar = Pick<EngineInterface, 'state' | 'fs' | 'process' | 'clock' | 'ui' | 'store' | 'session' | 'prompt' | 'config' | 'command' | 'env'>
@@ -96,6 +110,8 @@ let untrackedMode: 'all' | 'normal' = 'all'
 /** rows the pane showed at its last draw, and where it was seated: what scrolling and reveal size themselves to */
 let lastVisible = 20
 let lastPlacement: 'dock' | 'inline' = 'dock'
+/** lines the preview showed at its last draw: what paging sizes itself to */
+let lastPreviewVisible = 20
 /** the person's home folder, shown as `~` in long paths */
 let homeDir = ''
 /** whether the person's theme is a light one: picks the glow palette */
@@ -119,6 +135,8 @@ function readConfig(o: PluginOptions): Config {
     glow: o['glow'] !== false,
     glass: o['glass'] !== false,
     animate: o['animate'] !== false,
+    editor: typeof o['editor'] === 'string' && o['editor'].trim() !== '' ? o['editor'] : 'code -g {path}:{line}',
+    previewIn: o['previewIn'] === 'pane' ? 'pane' : 'band',
   }
 }
 
@@ -387,11 +405,12 @@ const stopTimers = (): void => {
 const savePrefs = async ($: Dollar): Promise<void> => {
   const root = await read($, rootAtom)
   const view = await read($, viewAtom)
+  const under = view === 'file' ? ((await read($, previewAtom))?.back ?? 'tree') : view
   await $.store.set(`collapsed:${root}`, await read($, collapsedAtom))
   await $.store.set('prefs', {
     showIgnored: await read($, showIgnoredAtom),
     focusMode: await read($, focusModeAtom),
-    view: view === 'peek' ? 'changes' : view,
+    view: under === 'changes' || under === 'peek' ? 'changes' : 'tree',
   })
 }
 
@@ -405,6 +424,8 @@ const loadPrefs = async ($: Dollar, root: string): Promise<void> => {
   await update($, viewAtom, () => (p.view === 'changes' ? 'changes' : 'tree'))
   await update($, filterAtom, () => null)
   await update($, peekAtom, () => null)
+  await update($, previewAtom, () => null)
+  await update($, previewOffsetAtom, () => 0)
 }
 
 // ---------- the lines the pane shows ----------
@@ -460,7 +481,12 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
   const out = { root, git, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, focused, dimKeys }
   let lines: Line[] = []
 
-  if (view === 'peek' && peek !== null) {
+  // the preview in the pane draws its own body; in the band, the pane goes on showing the view under it
+  const preview = view === 'file' ? await read($, previewAtom) : null
+  if (view === 'file' && (cfg.previewIn === 'pane' || preview === null)) return { ...out, lines }
+  const under: PaneView = view === 'file' ? (preview?.back ?? 'tree') : view
+
+  if (under === 'peek' && peek !== null) {
     const text = peekDiff.replace(/\t/g, '  ')
     if (text.trim() === '') lines.push({ key: 'note', kind: 'note', text: 'no diff' })
     else text.split('\n').forEach((t, i) => lines.push({ key: `diff:${i}`, kind: 'diff', text: t }))
@@ -473,7 +499,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     return { ...out, lines }
   }
 
-  if (view === 'changes') {
+  if (under === 'changes') {
     for (const { state, label } of GROUPS) {
       const paths = Object.entries(git.files)
         .filter(([, s]) => s === state)
@@ -562,6 +588,7 @@ const scrollBy = async ($: Dollar, by: number, isJump: boolean): Promise<void> =
 /** The now-editing line's press: back to the tree, filter off, and the file in the middle of the window. */
 const jumpTo = async ($: Dollar, path: string): Promise<void> => {
   if (isAbsolute(path)) return
+  if ((await read($, viewAtom)) === 'file') await closePreview($)
   await update($, viewAtom, () => 'tree')
   await update($, filterAtom, () => null)
   lastPersonScrollAt = 0
@@ -704,11 +731,11 @@ const setFilter = async ($: Dollar, text: string): Promise<void> => {
   await update($, offsetAtom, () => 0)
 }
 
-/** Enter in the filter: mention the best match. */
-const mentionFirst = async ($: Dollar): Promise<void> => {
+/** Enter in the filter: preview the best match. */
+const previewFirst = async ($: Dollar): Promise<void> => {
   const { lines } = await loadView($, await $.clock.now())
   const first = lines.find(l => l.kind === 'match')
-  if (first && first.kind === 'match') await mention($, first.path)
+  if (first && first.kind === 'match') await openPreview($, first.path)
 }
 
 const openPeek = async ($: Dollar, path: string): Promise<void> => {
@@ -728,6 +755,190 @@ const closePeek = async ($: Dollar): Promise<void> => {
   await update($, offsetAtom, () => 0)
 }
 
+// ---------- the row cursor ----------
+
+/** The lines the cursor stops on: the ones drawn as a pressable row. */
+const isStop = (line: Line | undefined): boolean => line !== undefined && (line.kind === 'row' || line.kind === 'change' || line.kind === 'match')
+
+/** The window offset that keeps line `at` in view, a margin from either edge while there are lines beyond. */
+const offsetToShow = (at: number, offset: number, visible: number, total: number): number => {
+  const margin = Math.max(0, Math.min(CURSOR_MARGIN, Math.floor((visible - 1) / 2)))
+  let next = offset
+  if (at < offset + margin) next = at - margin
+  else if (at > offset + visible - 1 - margin) next = at - visible + 1 + margin
+  return clamp(next, 0, Math.max(0, total - visible))
+}
+
+/** Moves the focus ring a number of rows, or to the first or last; the window follows it. */
+const moveCursor = async ($: Dollar, step: number | 'first' | 'last'): Promise<void> => {
+  const now = await $.clock.now()
+  const { lines, focused } = await loadView($, now)
+  const stops = lines.flatMap((l, i) => (isStop(l) ? [i] : []))
+  if (stops.length === 0) return
+  const offset = clamp(await read($, offsetAtom), 0, Math.max(0, lines.length - lastVisible))
+  const at = lines.findIndex(l => l.key === focused)
+  const isInView = at >= offset && at < offset + lastVisible
+  let target: number
+  if (step === 'first') target = stops[0] as number
+  else if (step === 'last') target = stops[stops.length - 1] as number
+  else if (!isStop(lines[at]) || !isInView) {
+    // no cursor yet, or the wheel took it out of view: land on the first row in view, or the last going up
+    const inView = stops.filter(i => i >= offset && i < offset + lastVisible)
+    target = (step < 0 ? inView[inView.length - 1] : inView[0]) ?? (stops[0] as number)
+  } else {
+    target = stops[clamp(stops.indexOf(at) + step, 0, stops.length - 1)] as number
+  }
+  const key = (lines[target] as Line).key
+  lastPersonScrollAt = now // following Claude leaves the window to the person for a moment
+  await update($, offsetAtom, () => offsetToShow(target, offset, lastVisible, lines.length))
+  await update($, focusedAtom, () => key)
+  try {
+    await $.ui.focus({ requestId: PANE, key }) // so Enter presses the row; a refusal (the pane lacks the keys) leaves the mark alone
+  } catch {
+    // nothing to do: the cursor is drawn either way
+  }
+}
+
+/** The person moved the ring (Tab, a click): the window follows it. */
+const showCursor = async ($: Dollar, key: string): Promise<void> => {
+  if (lastPlacement !== 'dock') return
+  const { lines } = await loadView($, await $.clock.now())
+  const at = lines.findIndex(l => l.key === key)
+  if (at < 0) return
+  const offset = await read($, offsetAtom)
+  const next = offsetToShow(at, offset, lastVisible, lines.length)
+  if (next !== offset) await update($, offsetAtom, () => next)
+}
+
+// ---------- the file preview ----------
+
+const sizeText = (bytes: number): string =>
+  bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+
+/** A text's lines, without the empty one after a final newline. */
+const splitLines = (text: string): string[] => {
+  const lines = text.split('\n')
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
+
+const absoluteOf = (root: string, path: string): string => (isAbsolute(path) ? path : path ? `${root}/${path}` : root)
+
+/** A file's text for the preview, or the note that stands in for it. */
+const readPreview = async ($: Dollar, abs: string): Promise<{ text: string | null; note: string | null }> => {
+  try {
+    const { size } = await $.fs.stat(abs)
+    if (size > PREVIEW_MAX_BYTES) return { text: null, note: `too large to preview (${sizeText(size)})` }
+    const raw = await $.fs.read(abs)
+    if (raw.includes('\0')) return { text: null, note: `binary file (${sizeText(size || raw.length)})` }
+    if (raw === '') return { text: null, note: 'empty file' }
+    // the highlighter takes tab and newline as its only control characters
+    const text = raw
+      .replace(/\r\n?/g, '\n')
+      .replace(/\t/g, '  ')
+      .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+    return { text: splitLines(text).slice(0, PREVIEW_MAX_LINES).join('\n'), note: null }
+  } catch (err) {
+    return { text: null, note: `cannot read: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+/** Enter or a click on a file: show it highlighted, in the band above the prompt (or the pane), driven from the tree. */
+const openPreview = async ($: Dollar, path: string): Promise<void> => {
+  const root = await read($, rootAtom)
+  const { text, note } = await readPreview($, absoluteOf(root, path))
+  const view = await read($, viewAtom)
+  const previous = await read($, previewAtom)
+  const back: PaneView = view === 'file' ? (previous?.back ?? 'tree') : view
+  const cursor = view === 'file' ? (previous?.cursor ?? null) : await read($, focusedAtom)
+  await update($, previewAtom, () => ({ path, text, note, back, cursor }))
+  await update($, previewOffsetAtom, () => 0)
+  await update($, viewAtom, () => 'file')
+}
+
+/** `q`: back to the view the preview came from, the cursor on the row it left. */
+const closePreview = async ($: Dollar): Promise<void> => {
+  const preview = await read($, previewAtom)
+  await update($, viewAtom, () => preview?.back ?? 'tree')
+  await update($, previewAtom, () => null)
+  await update($, previewOffsetAtom, () => 0)
+  const cursor = preview?.cursor
+  if (!cursor) return
+  await update($, focusedAtom, () => cursor)
+  try {
+    await $.ui.focus({ requestId: PANE, key: cursor })
+  } catch {
+    // the mark is back on the row either way
+  }
+}
+
+const scrollPreview = async ($: Dollar, by: number | 'first' | 'last'): Promise<void> => {
+  const preview = await read($, previewAtom)
+  const total = preview?.text ? splitLines(preview.text).length : 0
+  const max = Math.max(0, total - lastPreviewVisible)
+  await update($, previewOffsetAtom, o => (by === 'first' ? 0 : by === 'last' ? max : clamp(o + by, 0, max)))
+}
+
+/** Claude wrote the file on show: read it again, the scroll kept. */
+const rereadPreview = async ($: Dollar, path: string): Promise<void> => {
+  const preview = await read($, previewAtom)
+  if (!preview || preview.path !== path || (await read($, viewAtom)) !== 'file') return
+  const { text, note } = await readPreview($, absoluteOf(await read($, rootAtom), path))
+  await update($, previewAtom, p => (p && p.path === path ? { ...p, text, note } : p))
+}
+
+// ---------- mention and editor ----------
+
+/** What `m` and `o` act on: the previewed file, else the row under the cursor. */
+const targetOf = async ($: Dollar): Promise<{ path: string; isDir: boolean } | undefined> => {
+  if ((await read($, viewAtom)) === 'file') {
+    const preview = await read($, previewAtom)
+    return preview ? { path: preview.path, isDir: false } : undefined
+  }
+  const key = await read($, focusedAtom)
+  if (key?.startsWith('f:')) return { path: key.slice(2), isDir: false }
+  if (key?.startsWith('d:')) return { path: key.slice(2), isDir: true }
+  return undefined
+}
+
+const mentionTarget = async ($: Dollar): Promise<void> => {
+  const target = await targetOf($)
+  if (!target) return $.ui.toast('tree: move the cursor onto a row first (j/k)')
+  await mention($, target.isDir ? `${target.path}/` : target.path)
+}
+
+/** The editor command's parts: split on spaces, a part in double quotes kept whole. */
+const splitCommand = (command: string): string[] => [...command.matchAll(/"([^"]*)"|(\S+)/g)].map(m => m[1] ?? m[2] ?? '')
+
+const firstLine = (text: string): string => text.trim().split('\n')[0]?.trim() ?? ''
+
+/** Runs the configured editor on a file; GUI editors only, as a terminal one cannot take over Claude's screen. */
+const openInEditor = async ($: Dollar, path: string, line: number): Promise<void> => {
+  const root = await read($, rootAtom)
+  const isWindows = isWindowsPath(root)
+  const abs = absoluteOf(root, path)
+  const shown = isWindows ? abs.replace(/\//g, '\\') : abs
+  const parts = splitCommand(cfg.editor).map(p => p.replaceAll('{path}', shown).replaceAll('{line}', String(line)))
+  const head = parts[0]
+  if (head === undefined) return $.ui.toast('tree: the editor setting is empty')
+  // no shell runs the command, and on Windows `code` is a .cmd script: cmd starts it
+  const argv = isWindows && !/\.[A-Za-z0-9]+$/.test(head) ? ['cmd', '/c', ...parts] : parts
+  try {
+    const ran = await $.process.run(argv, { cwd: root, timeoutMs: EDITOR_TIMEOUT_MS })
+    if (ran.exitCode !== 0) $.ui.toast(`tree: editor failed: ${firstLine(ran.stderr) || `exit ${ran.exitCode}`}`)
+  } catch (err) {
+    $.ui.toast(`tree: editor failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+const openTarget = async ($: Dollar): Promise<void> => {
+  const target = await targetOf($)
+  if (!target) return $.ui.toast('tree: move the cursor onto a file first (j/k)')
+  if (target.isDir) return $.ui.toast('tree: o opens files; Enter folds a folder')
+  const line = (await read($, viewAtom)) === 'file' ? (await read($, previewOffsetAtom)) + 1 : 1
+  await openInEditor($, target.path, line)
+}
+
 const openPane = async ($: Dollar): Promise<boolean> => {
   const opened = await $.ui.open({ id: PANE, title: 'tree', columns: cfg.columns })
   await update($, closedByHandAtom, () => false)
@@ -736,7 +947,7 @@ const openPane = async ($: Dollar): Promise<boolean> => {
   return opened.isPlaced
 }
 
-const usage = 'tree: usage: /tree [changes | find <text> | refresh | reveal <path> | mention <path> | side left|right]'
+const usage = 'tree: usage: /tree [changes | find <text> | refresh | reveal <path> | mention <path> | preview <path> | side left|right]'
 
 // ---------- drawing ----------
 
@@ -767,12 +978,15 @@ const countsText = (c: LineCounts | undefined): string => (c ? (c.isBinary ? 'bi
 
 const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<RenderElement> => {
   const table = $.ui.resolve(e)
-  const { Box, Text, Button } = table
+  const { Box, Text, Button, Code } = table
   const Input = 'Input' in table ? table.Input : undefined // the mobile surface draws no field
   const now = await $.clock.now()
   const { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, lines, dimKeys } = await loadView($, now)
-  const [phase, offsetWanted] = await Promise.all([read($, phaseAtom), read($, offsetAtom)])
+  const [phase, offsetWanted, preview, previewWanted] = await Promise.all([read($, phaseAtom), read($, offsetAtom), read($, previewAtom), read($, previewOffsetAtom)])
   await read($, tickAtom)
+  const isFile = view === 'file' && preview !== null
+  /** the preview drawn in this pane; in the band, the pane goes on showing its rows and drives the band */
+  const isFileHere = isFile && cfg.previewIn === 'pane'
   const cols = Math.max(16, (e.props.bodyColumns || cfg.columns) - 2 * PAD_X)
   const isDocked = e.props.placement === 'dock'
   const bodyRows = Math.max(4, e.props.scroll.bodyRows || e.viewport?.rows || 24)
@@ -789,8 +1003,8 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const hint = cells(titleName) + 2 + cells(focusHint) <= cols ? focusHint : isFocused ? 'esc' : 'ctrl+x tab'
   const title = truncateMiddle(titleName, Math.max(8, cols - cells(hint) - 2))
   const titlePad = Math.max(1, cols - cells(title) - cells(hint))
-  const hasSecondRow = git.isRepo || view === 'peek'
-  const hasFilterRow = filter !== null && view !== 'peek'
+  const hasSecondRow = git.isRepo || view === 'peek' || isFile
+  const hasFilterRow = filter !== null && view !== 'peek' && view !== 'file'
   const current = active.length > 0 ? active[active.length - 1] : undefined
   const latest = Object.entries(trail).sort((x, y) => y[1] - x[1])[0]
   const lastPath = !current && latest && now - latest[1] < LAST_LINGER_MS ? latest[0] : undefined
@@ -800,17 +1014,32 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   // the legend: always drawn, pinned under the rows; its keys work while the pane holds the keyboard
   type LegendItem = { key: string; hotkey: string; label: string; run: () => void }
   const legend: LegendItem[] = []
-  if (view === 'peek') legend.push({ key: 'act:changes', hotkey: 'g', label: 'back', run: () => void closePeek($) })
-  else legend.push({ key: 'act:changes', hotkey: 'g', label: view === 'changes' ? 'tree' : 'changes', run: () => void toggleChanges($) })
-  if (view !== 'peek') legend.push({ key: 'act:filter', hotkey: 'f', label: filter === null ? 'find' : 'close', run: () => void toggleFilter($) })
-  if (view === 'tree' && filter === null) {
-    legend.push({ key: 'act:focus', hotkey: 'z', label: focusMode ? 'all' : 'focus', run: () => void toggleFocus($) })
-    legend.push({ key: 'act:ignored', hotkey: 'h', label: showIgnored ? 'hide ignored' : 'ignored', run: () => void toggleIgnored($) })
-  }
-  legend.push({ key: 'act:refresh', hotkey: 'r', label: 'refresh', run: () => void refresh($, { walk: true }) })
-  if (view === 'tree' && filter === null) {
-    legend.push({ key: 'act:collapse', hotkey: 'c', label: 'fold', run: () => void collapseAll($) })
-    legend.push({ key: 'act:expand', hotkey: 'e', label: 'unfold', run: () => void expandAll($) })
+  const hasRows = view === 'tree' || view === 'changes'
+  if (isFile) {
+    legend.push({ key: 'act:close', hotkey: 'q', label: 'back', run: () => void closePreview($) })
+    legend.push({ key: 'act:mention', hotkey: 'm', label: 'mention', run: () => void mentionTarget($) })
+    legend.push({ key: 'act:open', hotkey: 'o', label: 'editor', run: () => void openTarget($) })
+    legend.push({ key: 'act:down', hotkey: 'j', label: '↓', run: () => void scrollPreview($, 1) })
+    legend.push({ key: 'act:up', hotkey: 'k', label: '↑', run: () => void scrollPreview($, -1) })
+  } else {
+    if (view === 'peek') legend.push({ key: 'act:changes', hotkey: 'g', label: 'back', run: () => void closePeek($) })
+    else legend.push({ key: 'act:changes', hotkey: 'g', label: view === 'changes' ? 'tree' : 'changes', run: () => void toggleChanges($) })
+    if (view !== 'peek') legend.push({ key: 'act:filter', hotkey: 'f', label: filter === null ? 'find' : 'close', run: () => void toggleFilter($) })
+    if (view === 'tree' && filter === null) {
+      legend.push({ key: 'act:focus', hotkey: 'z', label: focusMode ? 'all' : 'focus', run: () => void toggleFocus($) })
+      legend.push({ key: 'act:ignored', hotkey: 'h', label: showIgnored ? 'hide ignored' : 'ignored', run: () => void toggleIgnored($) })
+    }
+    legend.push({ key: 'act:refresh', hotkey: 'r', label: 'refresh', run: () => void refresh($, { walk: true }) })
+    if (view === 'tree' && filter === null) {
+      legend.push({ key: 'act:collapse', hotkey: 'c', label: 'fold', run: () => void collapseAll($) })
+      legend.push({ key: 'act:expand', hotkey: 'e', label: 'unfold', run: () => void expandAll($) })
+    }
+    if (hasRows) {
+      legend.push({ key: 'act:mention', hotkey: 'm', label: 'mention', run: () => void mentionTarget($) })
+      legend.push({ key: 'act:open', hotkey: 'o', label: 'editor', run: () => void openTarget($) })
+      legend.push({ key: 'act:down', hotkey: 'j', label: '↓', run: () => void moveCursor($, 1) })
+      legend.push({ key: 'act:up', hotkey: 'k', label: '↑', run: () => void moveCursor($, -1) })
+    }
   }
   // the legend laid out row by row (the engine draws a plain hotkey Button as `h: label`), so every row carries the edge cell
   const legendLines: LegendItem[][] = [[]]
@@ -829,17 +1058,25 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const legendRows = legendLines.length
 
   // the window: docked, the pane owns it (header + rows + legend fill the body exactly); inline, the engine scrolls the whole tree
-  const visible = isDocked ? Math.max(1, bodyRows - headerRows - PAD_ROWS - legendRows) : lines.length
-  lastVisible = visible
-  const maxOffset = Math.max(0, lines.length - visible)
-  const offset = clamp(offsetWanted, 0, maxOffset)
-  const shown = isDocked ? lines.slice(offset, offset + visible) : lines
-  const padRows = isDocked ? Math.max(0, visible - shown.length) : 0
-  const hiddenAbove = isDocked ? offset : 0
-  const hiddenBelow = isDocked ? Math.max(0, lines.length - offset - visible) : 0
-  const hasBar = isDocked && maxOffset > 0
+  // the preview always owns its window, inline too: a whole file is never handed to the engine
+  const isOwnWindow = isDocked || isFileHere
+  const fileLines = isFileHere && preview.text !== null ? splitLines(preview.text) : []
+  const total = isFileHere ? fileLines.length : lines.length
+  const visible = isOwnWindow ? Math.max(1, bodyRows - headerRows - PAD_ROWS - legendRows) : lines.length
+  if (isFileHere) lastPreviewVisible = visible
+  else lastVisible = visible
+  const maxOffset = Math.max(0, total - visible)
+  const offset = clamp(isFileHere ? previewWanted : offsetWanted, 0, maxOffset)
+  const shown = isFileHere ? [] : isDocked ? lines.slice(offset, offset + visible) : lines
+  const fileShown = fileLines.slice(offset, offset + visible)
+  /** the rows the body draws before its padding: the lines, the file's lines, or the one note */
+  const bodyCount = isFileHere ? (preview.text === null ? 1 : fileShown.length) : shown.length
+  const padRows = isOwnWindow ? Math.max(0, visible - bodyCount) : 0
+  const hiddenAbove = isOwnWindow ? offset : 0
+  const hiddenBelow = isOwnWindow ? Math.max(0, total - offset - visible) : 0
+  const hasBar = isOwnWindow && maxOffset > 0
   const rowCols = hasBar ? cols - 2 : cols // the scrollbar takes a cell, with one of space before it
-  const thumbLen = hasBar ? Math.max(1, Math.round((visible * visible) / lines.length)) : 0
+  const thumbLen = hasBar ? Math.max(1, Math.round((visible * visible) / total)) : 0
   const thumbStart = hasBar ? Math.round((offset / maxOffset) * (visible - thumbLen)) : 0
 
   // ---- the glass: every drawn row has a place on the slab, top to bottom, and its color comes from there ----
@@ -847,10 +1084,10 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   /** what a hover's lift or the legend's shelf moves toward: the light on a dark slab, the shade on a light one */
   const toward = pal.isLight ? BLACK : WHITE
   const bodyStart = headerRows + 1 // the top cue row sits between the header and the lines
-  const legendStart = bodyStart + shown.length + padRows + 1
-  const total = legendStart + legendRows
+  const legendStart = bodyStart + bodyCount + padRows + 1
+  const slabRows = legendStart + legendRows
   /** the slab's color under drawn row `i`; with the glass off, the background the theme most likely has */
-  const slab = (i: number): Rgb => (cfg.glass ? glassRow(pal, i, total) : pal.base)
+  const slab = (i: number): Rgb => (cfg.glass ? glassRow(pal, i, slabRows) : pal.base)
   /** an edge cell's color: partly the terminal's own background, so the glass has no hard border */
   const featherOf = (c: Rgb): Rgb => (cfg.glass ? feather(pal, c) : c)
   /** a row's background: the slab with the glass on; with it off, only a tint that differs from the plain background */
@@ -859,7 +1096,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     return cfg.glass || hex !== toHex(slab(i)) ? hex : undefined
   }
   /** along the dusk, 0 at the top of the pane and 1 at the bottom */
-  const dusk = (i: number): Rgb => ramp([pal.accent, pal.violet], total <= 1 ? 0 : i / (total - 1))
+  const dusk = (i: number): Rgb => ramp([pal.accent, pal.violet], slabRows <= 1 ? 0 : i / (slabRows - 1))
   const hex = (rgb: Rgb): string => toHex(rgb)
   const silver = hex(pal.silver)
 
@@ -990,7 +1227,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   }
 
   const press = (row: Row) => () => {
-    void (row.kind === 'dir' ? toggleDir($, row.path) : mention($, row.path))
+    void (row.kind === 'dir' ? toggleDir($, row.path) : openPreview($, row.path))
   }
 
   /**
@@ -1101,7 +1338,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(countsShown) - 2)
     return (
       <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
-        <Button plain key={`f:${path}`} onPress={() => void mention($, path)} hover={{ bold: true, dimColor: false }}>
+        <Button plain key={`f:${path}`} onPress={() => void openPreview($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : <Text color={COLOR[state]} strikethrough={state === 'deleted'}>{shownPath}</Text>}
         </Button>
         <Text>{' '.repeat(pad)}</Text>
@@ -1142,7 +1379,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(badge))
     return (
       <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
-        <Button plain key={`f:${path}`} onPress={() => void mention($, path)} hover={{ bold: true, dimColor: false }}>
+        <Button plain key={`f:${path}`} onPress={() => void openPreview($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : parts}
         </Button>
         {badge ? <Text>{' '.repeat(pad)}</Text> : null}
@@ -1209,7 +1446,8 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   /** A shown line: the rim, the line on its slab and glow, and the scrollbar cell at the right edge while the lines overflow. */
   const drawShown = (line: Line, s: number): RenderElement => {
     const i = bodyStart + s
-    const under = lineUnder(s, line)
+    const isCursor = isFocused && focused === line.key
+    const under = isCursor ? mix(lineUnder(s, line), toward, pal.lift) : lineUnder(s, line) // the cursor row stays lit as a hover would
     const el = drawLine(line, under)
     const isThumb = s >= thumbStart && s < thumbStart + thumbLen
     // the thumb carries the dusk along its length; the track is barely there
@@ -1221,6 +1459,44 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
         {hasBar ? <Text> </Text> : null}
         {hasBar ? <Text color={barColor}>{isThumb ? '┃' : '│'}</Text> : null}
         {rightEdge(i, under)}
+      </Box>
+    )
+  }
+
+  /**
+   * The preview's body: the window's lines on the engine's highlighter, with a gutter numbering them, cut at the edge so
+   * a line is a row; the edge cells and the scrollbar run down beside it, each on its own row's glass.
+   */
+  const drawFile = (p: Preview): RenderElement => {
+    const rows = Array.from({ length: bodyCount }, (_, s) => bodyStart + s)
+    const mid = slab(bodyStart + Math.floor(bodyCount / 2))
+    const barColor = (s: number): string => {
+      const isThumb = s >= thumbStart && s < thumbStart + thumbLen
+      return isThumb ? hex(ramp([pal.accent, pal.violet], thumbLen <= 1 ? 0.5 : (s - thumbStart) / (thumbLen - 1))) : hex(mix(slab(bodyStart + s), pal.silver, 0.22))
+    }
+    return (
+      <Box key="b:file" flexDirection="row">
+        <Box flexDirection="column">{rows.map(i => edge(i))}</Box>
+        <Box flexDirection="column" width={hasBar ? rowCols : cols} height={bodyCount} backgroundColor={bgFor(mid, bodyStart)}>
+          {p.text === null ? (
+            <Text color={silver} italic>
+              {p.note ?? ''}
+            </Text>
+          ) : (
+            <Code source={fileShown.join('\n')} path={p.path} startLine={offset + 1} wrap="truncate-end" />
+          )}
+        </Box>
+        {hasBar ? (
+          <Box flexDirection="column">
+            {rows.map((i, s) => (
+              <Text backgroundColor={bgFor(slab(i), i)}>
+                {' '}
+                <Text color={barColor(s)}>{s >= thumbStart && s < thumbStart + thumbLen ? '┃' : '│'}</Text>
+              </Text>
+            ))}
+          </Box>
+        ) : null}
+        <Box flexDirection="column">{rows.map(i => rightEdge(i))}</Box>
       </Box>
     )
   }
@@ -1269,6 +1545,20 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const peekCounts = peek ? countsText(git.numstat[peek]) : ''
   const peekPath = peek ? shortenPath(peek, Math.max(1, cols - 2 - (peekCounts ? cells(peekCounts) + 1 : 0))) : ''
 
+  // file row: the previewed file, pressable to go back, and where the window is in it
+  const fileState = isFile ? git.files[preview.path] : undefined
+  const filePlace = !isFile
+    ? ''
+    : !isFileHere
+      ? 'below ↙' // the band above the prompt shows it, with its own position
+      : preview.text === null
+      ? ''
+      : fileShown.length === fileLines.length
+        ? `${fileLines.length} lines`
+        : `${offset + 1}–${offset + fileShown.length}/${fileLines.length}`
+  const filePath = isFile ? shortenPath(preview.path, Math.max(1, cols - 2 - (filePlace ? cells(filePlace) + 1 : 0)), homeDir) : ''
+  const filePad = Math.max(1, cols - 2 - cells(filePath) - cells(filePlace))
+
   // now-editing row: the file Claude has open, with the shimmer; else the one it just closed, dim, for a few seconds
   const nowShown = nowPath !== undefined ? shortenPath(nowPath, Math.max(1, cols - 2 - (current ? 0 : 6)), homeDir) : ''
 
@@ -1296,7 +1586,18 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
           <Text inverse>{shortenPath(root, cols, homeDir)}</Text>
         </Box>
       </Box>
-      {view === 'peek' && peek !== null ? (
+      {isFile ? (
+        <Box key="h:file" flexDirection="row" backgroundColor={bgFor(slab(secondAt), secondAt)}>
+          {edge(secondAt)}
+          <Button plain key="act:back" onPress={() => void closePreview($)} hover={{ bold: true }}>
+            <Text color={hex(pal.accent)}>‹</Text> <Text color={fileState ? COLOR[fileState] : undefined}>{filePath}</Text>
+          </Button>
+          <Text>{' '.repeat(filePad)}</Text>
+          <Text color={silver}>{filePlace}</Text>
+          <Box flexGrow={1} />
+          {rightEdge(secondAt)}
+        </Box>
+      ) : view === 'peek' && peek !== null ? (
         <Box key="h:peek" flexDirection="row" backgroundColor={bgFor(slab(secondAt), secondAt)}>
           {edge(secondAt)}
           <Button plain key="act:back" onPress={() => void closePeek($)} hover={{ bold: true }}>
@@ -1337,10 +1638,10 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
               key="filter"
               value={filter ?? ''}
               placeholder="type to find"
-              submitLabel="mention"
+              submitLabel="preview"
               autoFocus
               onInput={value => void setFilter($, value)}
-              onSubmit={() => void mentionFirst($)}
+              onSubmit={() => void previewFirst($)}
             />
           ) : (
             <Text dimColor>{filter || 'use /tree find <text>'}</Text>
@@ -1354,9 +1655,9 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
         </Box>
       ) : null}
       {drawCue(bodyStart - 1, hiddenAbove, '↑', false)}
-      {shown.map((line, s) => drawShown(line, s))}
+      {isFileHere ? drawFile(preview) : shown.map((line, s) => drawShown(line, s))}
       {Array.from({ length: padRows }, (_, j) => {
-        const i = bodyStart + shown.length + j
+        const i = bodyStart + bodyCount + j
         return (
           <Box flexDirection="row" backgroundColor={bgFor(slab(i), i)}>
             {edge(i)}
@@ -1387,7 +1688,67 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
         )
       })}
       {/* one row past the body, never shown: it keeps the engine's scroll keys live, and the ui.scroll hook turns them into the pane's own window */}
-      {isDocked ? <Text> </Text> : null}
+      {isOwnWindow ? <Text> </Text> : null}
+    </Box>
+  )
+}
+
+/** A hint, its parts dropped from the end while it is wider than `room`. */
+const fitHint = (parts: string[], room: number): string => {
+  for (let n = parts.length; n > 0; n--) {
+    const text = parts.slice(0, n).join('  ')
+    if (cells(text) <= room) return text
+  }
+  return ''
+}
+
+/**
+ * The preview in the band above the prompt, where plan mode and the questions show: as wide as the transcript and as
+ * tall as the band may be (half the terminal at most). The tree pane keeps the keyboard and drives it.
+ */
+const drawBand = async ($: RenderDollar, e: RenderInput<'AbovePrompt'>): Promise<RenderElement | undefined> => {
+  const [view, preview, offsetWanted] = await Promise.all([read($, viewAtom), read($, previewAtom), read($, previewOffsetAtom)])
+  if (view !== 'file' || preview === null || cfg.previewIn !== 'band' || e.props.hasSurvey) return undefined
+  const { Box, Text, Code } = $.ui.resolve(e)
+  const pal = glassPalette(cfg.accent, isLightTheme)
+  const cols = Math.max(20, e.props.bodyColumns)
+  const lines = preview.text === null ? [] : splitLines(preview.text)
+  // less the border's two rows, the header row and the cue row, so the band shows it whole
+  const visible = Math.max(1, e.props.maxRows - 2 - BAND_BORDER * 2)
+  lastPreviewVisible = visible
+  const offset = clamp(offsetWanted, 0, Math.max(0, lines.length - visible))
+  const shown = lines.slice(offset, offset + visible)
+  const below = Math.max(0, lines.length - offset - shown.length)
+  const place = preview.text === null ? '' : shown.length === lines.length ? `${lines.length} lines` : `${offset + 1}–${offset + shown.length}/${lines.length}`
+  const state = (await read($, gitAtom)).files[preview.path]
+  const path = shortenPath(preview.path, Math.max(8, Math.floor(cols / 2)), homeDir)
+  const inner = cols - 2 * BAND_BORDER - 2 * BAND_PAD_X // the frame and the cell of room inside it on each side
+  const hint = fitHint(['in the tree:', 'j k ↑ ↓ PgUp PgDn scroll', 'm mention', 'o editor', 'q close'], inner - cells(path) - cells(place) - 4)
+  const cue = [offset > 0 ? `↑ ${offset} above` : '', below > 0 ? `↓ ${below} more` : ''].filter(Boolean).join('   ')
+  return (
+    <Box flexDirection="column" width={cols} borderStyle="round" borderColor={toHex(pal.accent)} paddingX={BAND_PAD_X}>
+      <Box flexDirection="row">
+        <Text color={toHex(pal.accent)}>▍</Text>
+        <Text color={state ? COLOR[state] : toHex(pal.accent)} bold>
+          {path}
+        </Text>
+        <Text>{'  '}</Text>
+        <Text color={toHex(pal.silver)}>{place}</Text>
+        <Box flexGrow={1} />
+        <Text dimColor>{hint}</Text>
+      </Box>
+      {preview.text === null ? (
+        <Text color={toHex(pal.silver)} italic>
+          {preview.note ?? ''}
+        </Text>
+      ) : (
+        <Box height={shown.length}>
+          <Code source={shown.join('\n')} path={preview.path} startLine={offset + 1} wrap="truncate-end" />
+        </Box>
+      )}
+      <Text color={toHex(pal.silver)} dimColor>
+        {cue || ' '}
+      </Text>
     </Box>
   )
 }
@@ -1400,8 +1761,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'tree',
-      description: 'File tree pane: toggle it, or changes, find <text>, refresh, reveal <path>, mention <path>, side left|right',
-      argumentHint: '[changes | find <text> | refresh | reveal <path> | mention <path> | side left|right]',
+      description: 'File tree pane: toggle it, or changes, find <text>, refresh, reveal <path>, mention <path>, preview <path>, side left|right',
+      argumentHint: '[changes | find <text> | refresh | reveal <path> | mention <path> | preview <path> | side left|right]',
     })
     const root = normalizeRoot(await $.session.root())
     homeDir = normalizeRoot((await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')) ?? '')
@@ -1470,6 +1831,13 @@ export const register: Register = (on, options) => {
         await mention($, rel)
         return { text: `tree: mentioned ${rel}.` }
       }
+      case 'preview': {
+        if (!arg) return { text: 'tree: preview needs a path.' }
+        const rel = relativeTo(await read($, rootAtom), arg) ?? toPosix(arg) // outside the root, the absolute path
+        if (!(await $.ui.panes()).some(p => p.id === PANE)) await openPane($)
+        await openPreview($, rel)
+        return { text: `tree: previewing ${rel}.` }
+      }
       case 'side': {
         if (arg !== 'left' && arg !== 'right') return { text: 'tree: side takes left or right.' }
         const set = await $.config.set({ key: 'tree.side', value: arg })
@@ -1505,7 +1873,10 @@ export const register: Register = (on, options) => {
       await update($, activeAtom, list => list.filter(a => a.toolUseId !== e.tool_use_id))
       await update($, trailAtom, t => ({ ...t, [path]: ended }))
       armTrail($)
-      if (!isRead) scheduleRefresh($, rel === null ? undefined : parentOf(rel))
+      if (!isRead) {
+        scheduleRefresh($, rel === null ? undefined : parentOf(rel))
+        void rereadPreview($, path)
+      }
     }
   }).catch(($, e, next) => next(e))
 
@@ -1542,10 +1913,26 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, ($, e) => drawPane($, e))
 
+  // The file preview, above the prompt; any other time the band is left to the rest.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await drawBand($, e)) ?? next(e))
+
+  // The wheel over the band scrolls the file it shows.
+  on('ui.scroll', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if ((await read($, viewAtom)) !== 'file' || cfg.previewIn !== 'band') return next(e)
+    await scrollPreview($, e.by)
+    return {}
+  })
+
   on('ui.close', { id: PANE }, async ($, e, next) => {
     if (e.origin.kind === 'person') {
       await update($, closedByHandAtom, () => true)
       await $.store.set(`closed:${await $.session.id()}`, true)
+    }
+    if ((await read($, viewAtom)) === 'file') {
+      // a preview does not outlive its pane: it opens again on the view under it, at the tree's width
+      const back = (await read($, previewAtom))?.back ?? 'tree'
+      await update($, viewAtom, () => back)
+      await update($, previewAtom, () => null)
     }
     stopTimers()
     return next(e)
@@ -1559,17 +1946,35 @@ export const register: Register = (on, options) => {
     return set
   })
 
-  // The focus ring's element, for the cursor mark.
+  // The focus ring's element is the row cursor; when the person moves it (Tab, a click), the window follows.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
     await update($, focusedAtom, () => e.element ?? null)
-    return next(e)
+    const moved = await next(e)
+    if (e.origin.kind === 'person' && e.element !== undefined) await showCursor($, e.element)
+    return moved
   })
 
   // Docked, the pane owns its window: the engine's move is answered with the pane's own, and the engine's window stays put.
+  // The person's scroll keys carry no pointer cell, and those move the cursor (or, in the preview, the lines); the wheel
+  // scrolls. One row is an arrow, a body's height a page key, more than that Home or End.
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
-    if (e.origin.kind === 'person') lastPersonScrollAt = await $.clock.now()
+    const isPerson = e.origin.kind === 'person'
+    if (isPerson) lastPersonScrollAt = await $.clock.now()
+    const isJump = Math.abs(e.by) > e.bodyRows
+    const isPage = !isJump && Math.abs(e.by) === e.bodyRows && e.bodyRows > 1
+    const jump = e.by < 0 ? ('first' as const) : ('last' as const)
+    // while a file shows, the keys scroll it; the wheel too, but over the pane's rows when the band shows the file
+    const isWheelOverRows = cfg.previewIn === 'band' && e.pointer !== undefined
+    if ((await read($, viewAtom)) === 'file' && !isWheelOverRows) {
+      await scrollPreview($, isJump ? jump : isPage ? Math.sign(e.by) * Math.max(1, lastPreviewVisible - 1) : e.by)
+      return {}
+    }
     if (lastPlacement !== 'dock') return next(e)
-    await scrollBy($, e.by, Math.abs(e.by) > e.bodyRows)
+    if (isPerson && e.pointer === undefined) {
+      await moveCursor($, isJump ? jump : isPage ? Math.sign(e.by) * Math.max(1, lastVisible - 1) : e.by)
+      return {}
+    }
+    await scrollBy($, e.by, isJump)
     return {}
   })
 }

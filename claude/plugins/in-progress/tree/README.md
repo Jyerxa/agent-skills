@@ -19,7 +19,8 @@ agent-skills
   ▾ pattern-design
 g: changes  f: find  z: focus
 h: ignored  r: refresh
-c: fold  e: unfold
+c: fold  e: unfold  m: mention
+o: editor  j: ↓  k: ↑
 ```
 
 - The working directory's name heads the pane; hover it for the full path. The branch row shows ahead/behind and a dirty count, or `✓` when clean.
@@ -64,26 +65,31 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 
 | Action | How |
 |---|---|
-| Mention a file in your next prompt | click it, or Tab to it and press Enter: `@path ` lands at the cursor |
-| Fold or unfold a folder | click it |
+| Move through the tree | ↑ ↓ or `j` `k` while focused move the row cursor (the `▍` row); PgUp PgDn a page, Home End the ends. The window follows the cursor; the wheel scrolls without moving it |
+| Read a file | click it, or Enter on the cursor's row: the file opens above the prompt, where plan mode shows, as wide as the transcript and highlighted with line numbers. The tree stays in the pane and keeps the keyboard: ↑ ↓ / `j` `k`, PgUp PgDn and Home End scroll the file, the wheel over it does too, and `q` (or the `‹` path row) closes it with the cursor where it was |
+| Fold or unfold a folder | click it, or Enter on it |
+| Mention a file in your next prompt | `m` on the cursor's row, or in the preview: `@path ` lands at the composer's cursor (a folder mentions as `@folder/ `) |
+| Open a file in your editor | `o` on the cursor's row, or in the preview at the top line in view; runs the `editor` setting |
 | See what changed | `g` while focused, or `/tree changes`: changed files grouped by state with `+added −removed` counts; `g` again returns to the tree |
 | Peek a diff | `±` on a row of the Changes view; `g` goes back |
-| Find a file | `f` while focused, or `/tree find <text>`: fuzzy, so `prd` finds `docs/PRD.md`; Enter mentions the best match; `×` or `f` closes |
+| Find a file | `f` while focused, or `/tree find <text>`: fuzzy, so `prd` finds `docs/PRD.md`; Enter previews the best match; `×` or `f` closes |
 | Show only what's in play | `z` while focused: changed and touched files and the folders above them; `z` again shows everything |
 | Focus the pane | ctrl+x tab (cycles band, panes, prompt) |
 | Resize the dock | ctrl+x ← / ctrl+x → |
-| Scroll | wheel, or ↑ ↓, PgUp PgDn, Home End while focused |
+| Scroll | the wheel |
 | Show gitignored entries | `h` while focused |
 | Refresh now | `r` while focused, or `/tree refresh` |
 | Fold or unfold everything | `c` / `e` while focused |
 | Scroll to a file | `/tree reveal <path>` |
-| Mention without the mouse | `/tree mention <path>` |
+| Mention or preview from the prompt | `/tree mention <path>`, `/tree preview <path>` |
+
+Space can't be bound: Claude Code gives a pane only one-letter or one-digit hotkeys, so Enter does the folding. A click and Enter are the same press to Claude Code, which is why a click previews rather than mentions. Esc hands the keyboard back to the prompt and leaves a preview open; `q` closes it.
 
 Hover a row to light it; hover a truncated name to see it whole.
 
 The key legend is always pinned to the bottom of the pane, dim until the pane has the keyboard. Docked, the pane scrolls its own rows between the header and the legend, so both stay put as you wheel or arrow through a long tree; a slim scrollbar on the right, its thumb carrying the dusk gradient, and `↑ N more` / `↓ N more` set into the hairlines at the edges show what's off screen.
 
-The diff peek opens inside the tree pane rather than beside it: Claude Code shows one pane at a time, and a second pane would become a tab hiding the tree.
+The diff peek opens inside the tree pane rather than beside it: Claude Code shows one pane at a time, and a second pane would become a tab hiding the tree. The file preview uses the band above the prompt instead, the only place a plugin can draw across the transcript's width. A pane can't paint outside itself, and the dock doesn't widen when a plugin asks. The band can't take the keyboard while you hold the tree either, so the tree drives it.
 
 ## Configuration
 
@@ -103,6 +109,8 @@ Each field is a row in `/config` under the plugin's name.
 | `glow` | true | Light the rows around the file Claude is editing. |
 | `glass` | true | Draw the pane on the tinted glass slab. Off, rows sit on the terminal's own background; type colors, chips and the glow stay. |
 | `animate` | true | Ripple rows when a folder opens or closes. |
+| `editor` | `code -g {path}:{line}` | What `o` runs. `{path}` is the file's absolute path, `{line}` the preview's top line (1 from the tree); a part in double quotes stays whole. On Windows a command with no extension runs through `cmd /c`, since `code` is a `.cmd` script. Use an editor that opens its own window: a terminal editor can't take over Claude's screen, but `wt nvim {path}` opens one in a new Windows Terminal tab. |
+| `previewIn` | `band` | Where a file preview shows. `band`: above the prompt, as wide as the transcript and up to half the terminal tall (Claude Code caps that band there; a survey or question takes it back while it's up). `pane`: inside the tree pane, at its width. |
 
 ## How it stays cheap
 
