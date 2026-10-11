@@ -1,0 +1,11 @@
+{
+  "name": "jyerxa-agent-skills",
+  "owner": { "name": "jyerxa" },
+  "plugins": [
+    {
+      "name": "tree",
+      "source": "./claude/plugins/in-progress/tree",
+      "description": "A live file tree pane: the whole working directory, git status colors, and a shimmer on the file Claude is editing."
+    }
+  ]
+}
