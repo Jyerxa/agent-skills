@@ -4,7 +4,12 @@ export const toPosix = (p: string): string => p.replace(/\\/g, '/')
 
 export const isWindowsPath = (p: string): boolean => /^[A-Za-z]:\//.test(p)
 
+export const isAbsolute = (p: string): boolean => p.startsWith('/') || isWindowsPath(p)
+
 export const normalizeRoot = (root: string): string => toPosix(root).replace(/\/+$/, '')
+
+/** The absolute path of a tree-relative one ('' is the root itself); an absolute path is kept. */
+export const absoluteOf = (root: string, path: string): string => (isAbsolute(path) ? path : path ? `${root}/${path}` : root)
 
 const trimDots = (p: string): string => p.replace(/^(\.\/)+/, '').replace(/\/+$/, '')
 
@@ -16,8 +21,7 @@ const trimDots = (p: string): string => p.replace(/^(\.\/)+/, '').replace(/\/+$/
 export function relativeTo(root: string, filePath: string): string | null {
   const r = normalizeRoot(root)
   const p = toPosix(filePath).replace(/\/+$/, '')
-  const isAbsolute = p.startsWith('/') || isWindowsPath(p)
-  if (!isAbsolute) return trimDots(p)
+  if (!isAbsolute(p)) return trimDots(p)
   const ignoreCase = isWindowsPath(r)
   const a = ignoreCase ? p.toLowerCase() : p
   const b = ignoreCase ? r.toLowerCase() : r

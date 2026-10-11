@@ -6,7 +6,6 @@ import { allDirs, allFiles, flatten, type FlattenOptions } from './tree'
 
 const d = (names: string[]): DirListing => ({
   entries: names.map(n => (n.endsWith('/') ? { name: n.slice(0, -1), kind: 'dir' as const } : { name: n, kind: 'file' as const })),
-  mtimeMs: 1,
 })
 
 const REPO: Record<string, DirListing> = {

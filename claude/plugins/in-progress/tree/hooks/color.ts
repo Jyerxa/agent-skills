@@ -15,7 +15,7 @@ export const parseHex = (hex: string): Rgb | null => {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
 }
 
-const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi)
+export const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi)
 
 export const toHex = (c: Rgb): string =>
   `#${[c.r, c.g, c.b].map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('')}`

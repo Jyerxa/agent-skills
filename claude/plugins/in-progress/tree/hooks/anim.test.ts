@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Anim, durationOf, isDone, rowPhase, stepFor } from './anim'
+import type { FoldAnim as Anim } from '../types'
+import { durationOf, isDone, rowPhase, stepFor } from './anim'
 
 const unfold: Anim = { kind: 'unfold', path: 'src', startedAt: 0, count: 4, stepMs: 20 }
 const fold: Anim = { kind: 'fold', path: 'src', startedAt: 0, count: 4, stepMs: 20 }

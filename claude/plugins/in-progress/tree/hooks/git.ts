@@ -11,8 +11,13 @@ export const EMPTY_GIT: GitSnapshot = {
   dirCounts: {},
   ignored: [],
   numstat: {},
-  at: 0,
 }
+
+/** The paths git reports in `state`. */
+export const pathsIn = (files: Readonly<Record<string, GitState>>, state: GitState): string[] =>
+  Object.entries(files)
+    .filter(([, s]) => s === state)
+    .map(([p]) => p)
 
 /** The order the Changes view groups files in, and each group's heading. */
 export const GROUPS: readonly { state: GitState; label: string }[] = [
