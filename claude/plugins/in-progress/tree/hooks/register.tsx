@@ -3,7 +3,7 @@ import type { Color, EngineInterface, Hook, PluginOptions, Register, RenderEleme
 
 import type { ActiveFile, DirListing, FoldAnim, GitSnapshot, GitState, LineCounts, PaneView } from '../types'
 import { isDone, rowPhase, stepFor } from './anim'
-import { CLAUDE_ACCENT, glowTints, parseHex } from './color'
+import { BLACK, CLAUDE_ACCENT, feather, glassPalette, glassRow, glowOver, glowWeight, gradientRuns, mix, parseHex, ramp, smoothstep, sweepAt, toHex, WHITE, type Rgb } from './color'
 import { fuzzyFilter } from './find'
 import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus } from './git'
 import { ancestorsOf, baseName, cells, join, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
@@ -72,6 +72,7 @@ export type Config = {
   maxRows: number
   accent: string
   glow: boolean
+  glass: boolean
   animate: boolean
 }
 
@@ -116,6 +117,7 @@ function readConfig(o: PluginOptions): Config {
     maxRows: 2000,
     accent: typeof o['accent'] === 'string' && parseHex(o['accent']) ? o['accent'] : CLAUDE_ACCENT,
     glow: o['glow'] !== false,
+    glass: o['glass'] !== false,
     animate: o['animate'] !== false,
   }
 }
@@ -758,7 +760,8 @@ const COLOR: Record<GitState, Color> = {
   conflicted: 'error',
 }
 
-const tierColor = (ageMs: number): Color => (ageMs < 10_000 ? 'claude' : ageMs < 120_000 ? 'subtle' : 'inactive')
+/** a badge drawn as a chip: the letter with a cell of tint on each side */
+const CHIP_CELLS = 3
 
 const countsText = (c: LineCounts | undefined): string => (c ? (c.isBinary ? 'bin' : `+${c.added} −${c.removed}`) : '')
 
@@ -773,6 +776,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const cols = Math.max(16, (e.props.bodyColumns || cfg.columns) - 2 * PAD_X)
   const isDocked = e.props.placement === 'dock'
   const bodyRows = Math.max(4, e.props.scroll.bodyRows || e.viewport?.rows || 24)
+  const isFocused = e.props.isFocused
   lastPlacement = e.props.placement
 
   const activeByPath = new Map<string, ActiveFile>()
@@ -781,8 +785,8 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   // header: the working directory's name with the focus hint at the right; then the branch and status, or the peeked file;
   // then what Claude is editing
   const titleName = baseName(root) || root
-  const focusHint = e.props.isFocused ? 'esc to leave' : 'ctrl+x tab to focus'
-  const hint = cells(titleName) + 2 + cells(focusHint) <= cols ? focusHint : e.props.isFocused ? 'esc' : 'ctrl+x tab'
+  const focusHint = isFocused ? 'esc to leave' : 'ctrl+x tab to focus'
+  const hint = cells(titleName) + 2 + cells(focusHint) <= cols ? focusHint : isFocused ? 'esc' : 'ctrl+x tab'
   const title = truncateMiddle(titleName, Math.max(8, cols - cells(hint) - 2))
   const titlePad = Math.max(1, cols - cells(title) - cells(hint))
   const hasSecondRow = git.isRepo || view === 'peek'
@@ -838,18 +842,35 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const thumbLen = hasBar ? Math.max(1, Math.round((visible * visible) / lines.length)) : 0
   const thumbStart = hasBar ? Math.round((offset / maxOffset) * (visible - thumbLen)) : 0
 
-  // the ember glow: a radial tint around the file Claude is writing, fading out for a moment after the edit ends
+  // ---- the glass: every drawn row has a place on the slab, top to bottom, and its color comes from there ----
+  const pal = glassPalette(cfg.accent, isLightTheme)
+  /** what a hover's lift or the legend's shelf moves toward: the light on a dark slab, the shade on a light one */
+  const toward = pal.isLight ? BLACK : WHITE
+  const bodyStart = headerRows + 1 // the top cue row sits between the header and the lines
+  const legendStart = bodyStart + shown.length + padRows + 1
+  const total = legendStart + legendRows
+  /** the slab's color under drawn row `i`; with the glass off, the background the theme most likely has */
+  const slab = (i: number): Rgb => (cfg.glass ? glassRow(pal, i, total) : pal.base)
+  /** an edge cell's color: partly the terminal's own background, so the glass has no hard border */
+  const featherOf = (c: Rgb): Rgb => (cfg.glass ? feather(pal, c) : c)
+  /** a row's background: the slab with the glass on; with it off, only a tint that differs from the plain background */
+  const bgFor = (rgb: Rgb, i: number): string | undefined => {
+    const hex = toHex(rgb)
+    return cfg.glass || hex !== toHex(slab(i)) ? hex : undefined
+  }
+  /** along the dusk, 0 at the top of the pane and 1 at the bottom */
+  const dusk = (i: number): Rgb => ramp([pal.accent, pal.violet], total <= 1 ? 0 : i / (total - 1))
+  const hex = (rgb: Rgb): string => toHex(rgb)
+  const silver = hex(pal.silver)
+
+  // the ember glow: a soft bell of light around the file Claude is writing, laid over the slab, fading for a moment after
   const glowing = active.find(a => !a.isRead)
   const glowFactor = glowing ? 1 : latest && now - latest[1] < GLOW_FADE_MS ? 1 - (now - latest[1]) / GLOW_FADE_MS : 0
   const glowPath = glowing ? glowing.path : latest ? latest[0] : ''
   const glowKey = isAbsolute(glowPath) ? `o:${glowPath}` : `f:${glowPath}`
-  const tints = cfg.glow && glowFactor > 0 ? glowTints(cfg.accent, isLightTheme) : []
-  const glowAt = tints.length > 0 ? shown.findIndex(l => l.key === glowKey) : -1
-  const tintFor = (s: number): string | undefined => {
-    if (glowAt < 0) return undefined
-    const level = Math.abs(s - glowAt) + (glowFactor > 0.66 ? 0 : glowFactor > 0.33 ? 1 : 2)
-    return tints[level]
-  }
+  const glowAt = cfg.glow && glowFactor > 0 ? shown.findIndex(l => l.key === glowKey) : -1
+  /** how lit a shown line's rim is: the glowing row's brightest, its neighbours less */
+  const litOf = (s: number): number => (glowAt < 0 ? 0 : glowWeight(s - glowAt) * glowFactor)
   // the guide from the folder down to the glowing file lights up
   const litLevel = new Map<string, number>()
   if (glowFactor > 0) {
@@ -870,33 +891,102 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     }
   }
 
+  /** What lies under a shown line: the slab, a diff line's green or red, a ripple's wash, and the glow over all of it. */
+  const lineUnder = (s: number, line: Line): Rgb => {
+    let under = slab(bodyStart + s)
+    if (line.kind === 'diff') {
+      const t = line.text
+      if (t.startsWith('+') && !t.startsWith('+++')) under = mix(under, pal.added, pal.isLight ? 0.08 : 0.1)
+      else if (t.startsWith('-') && !t.startsWith('---')) under = mix(under, pal.removed, pal.isLight ? 0.08 : 0.1)
+    }
+    if (dimKeys.has(line.key)) under = mix(under, pal.accent, 0.08) // a fold ripple passes like a wave of light
+    if (glowAt >= 0) under = glowOver(pal, under, s - glowAt, glowFactor)
+    return under
+  }
+
+  /** a hairline's runs: `len` cells of `─` starting `start` cells in, bright where the light enters and fading into the glass */
+  const hairRuns = (start: number, len: number, width: number, under: Rgb, isFromRight: boolean): RenderElement[] => {
+    const out: RenderElement[] = []
+    const runs = Math.max(1, Math.min(len, Math.ceil(len / 3)))
+    for (let k = 0; k < runs; k++) {
+      const from = Math.floor((k * len) / runs)
+      const to = Math.floor(((k + 1) * len) / runs)
+      if (to <= from) continue
+      const x = (start + (from + to) / 2) / Math.max(1, width)
+      const f = isFromRight ? 1 - x : x
+      const strength = (pal.isLight ? 0.55 : 0.7) * (1 - smoothstep(f))
+      out.push(<Text color={hex(mix(under, ramp([pal.accent, pal.violet], f), strength))}>{'─'.repeat(to - from)}</Text>)
+    }
+    return out
+  }
+
+  /** A soft pill: half-block caps in a tint of the hue, the text on that tint. */
+  const pill = (text: string, hue: Rgb, fg: Color, under: Rgb): RenderElement[] => {
+    const tint = hex(mix(under, hue, pal.isLight ? 0.18 : 0.26))
+    return [
+      <Text color={tint}>▐</Text>,
+      <Text color={fg} backgroundColor={tint}>
+        {text}
+      </Text>,
+      <Text color={tint}>▌</Text>,
+    ]
+  }
+
+  /** The light that moves through a name while Claude has the file open: moonlight for a read, an ember for a write. */
   const shimmer = (name: string, a: ActiveFile): RenderElement[] => {
-    const base: Color = a.isRead ? 'subtle' : 'claude'
-    const hot: Color = a.isRead ? 'text' : 'claude'
-    if (cfg.shimmer === 'off') return [<Text color={base} bold>{name}</Text>]
-    if (cfg.shimmer === 'pulse') return [<Text color={base} bold={phase % 10 < 5}>{name}</Text>]
+    const [dim, hot] = a.isRead ? pal.moon : pal.ember
+    if (cfg.shimmer === 'off') return [<Text color={hex(hot)} bold>{name}</Text>]
+    if (cfg.shimmer === 'pulse') {
+      const t = (1 - Math.cos((2 * Math.PI * phase) / 10)) / 2 // one breath a second
+      return [
+        <Text color={hex(mix(dim, hot, t))} bold={!a.isRead}>
+          {name}
+        </Text>,
+      ]
+    }
+    // a soft band of light sweeps through, entering and leaving fully; neighbouring cells of one shade draw as one run
     const chars = [...name]
-    const n = chars.length
-    const p = phase % (n + SHIMMER_WINDOW)
-    const start = Math.max(0, p - SHIMMER_WINDOW + 1)
-    const end = Math.min(n, p + 1)
+    const head = (phase % (chars.length + 6)) - 3
     const parts: RenderElement[] = []
-    const before = chars.slice(0, start).join('')
-    const mid = chars.slice(start, end).join('')
-    const after = chars.slice(end).join('')
-    if (before) parts.push(<Text color={base} dimColor>{before}</Text>)
-    if (mid) parts.push(<Text color={hot} bold>{mid}</Text>)
-    if (after) parts.push(<Text color={base} dimColor>{after}</Text>)
+    let run = ''
+    let runShade = -1
+    const flush = () => {
+      if (run) {
+        parts.push(
+          <Text color={hex(mix(dim, hot, runShade / 4))} bold={runShade >= 2}>
+            {run}
+          </Text>,
+        )
+      }
+      run = ''
+    }
+    chars.forEach((ch, i) => {
+      const shade = Math.round(sweepAt(i, head) * 4)
+      if (shade !== runShade) {
+        flush()
+        runShade = shade
+      }
+      run += ch
+    })
+    flush()
     return parts
   }
 
-  const glyphFor = (path: string, isDir: boolean, isOpen: boolean): { glyph: string; color: Color; a: ActiveFile | undefined } => {
+  /** the breathing `●`'s color, in step with its glyph: the accent warming toward the ember's brightest and back */
+  const breath = hex(mix(pal.accent, pal.ember[1], 0.7 * ((1 - Math.cos((2 * Math.PI * phase) / 9)) / 2)))
+  const readDot = hex(mix(pal.moon[0], pal.moon[1], 0.5))
+
+  const glyphFor = (path: string, isDir: boolean, isOpen: boolean): { glyph: string; color: string; a: ActiveFile | undefined } => {
     const a = activeByPath.get(path)
     const touched = trail[path]
-    if (isDir) return { glyph: isOpen ? '▾' : '▸', color: 'subtle', a: undefined }
-    if (a) return { glyph: a.isRead ? '●' : (BREATH[Math.floor(phase / 3) % BREATH.length] as string), color: a.isRead ? 'subtle' : 'claude', a }
-    if (touched !== undefined) return { glyph: '·', color: tierColor(now - touched), a: undefined }
-    return { glyph: ' ', color: 'subtle', a: undefined }
+    if (isDir) return { glyph: isOpen ? '▾' : '▸', color: hex(mix(pal.accent, pal.silver, 0.45)), a: undefined }
+    if (a) return { glyph: a.isRead ? '●' : (BREATH[Math.floor(phase / 3) % BREATH.length] as string), color: a.isRead ? readDot : breath, a }
+    if (touched !== undefined) {
+      // an afterglow: the ember cools through violet to a faint silver over the trail's fade
+      const t = smoothstep((now - touched) / TRAIL_FADE_MS)
+      return { glyph: '·', color: hex(ramp([pal.accent, mix(pal.violet, pal.silver, 0.5), mix(pal.silver, pal.base, 0.55)], t)), a: undefined }
+    }
+    return { glyph: ' ', color: silver, a: undefined }
   }
 
   const press = (row: Row) => () => {
@@ -904,24 +994,36 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   }
 
   /**
-   * The cell at the left edge of every row: an accent edge down the whole pane while it holds the keyboard, thicker on the
-   * row the focus ring is on, so a glance says whether the hotkeys will land here or in the prompt.
+   * The cell at the left edge of every row: the glass feathered toward the terminal, so the slab fades in rather than
+   * starting at a border, and lit by the glow beside the file Claude writes; while the pane holds the keyboard, a light
+   * pipe down the whole pane, thicker on the row the focus ring is on, so a glance says whether the hotkeys will land here
+   * or in the prompt.
    */
-  const edge = (key?: string): RenderElement => (
-    <Text color={cfg.accent}>{e.props.isFocused ? (key !== undefined && focused === key ? '▍' : '▏') : ' '}</Text>
-  )
+  const edge = (i: number, key?: string, lit = 0, under: Rgb = slab(i)): RenderElement => {
+    const isMark = key !== undefined && focused === key
+    const rim = mix(featherOf(under), pal.accent, 0.6 * lit)
+    return (
+      <Text color={hex(isMark ? pal.accent : dusk(i))} backgroundColor={bgFor(rim, i)}>
+        {isFocused ? (isMark ? '▍' : '▏') : ' '}
+      </Text>
+    )
+  }
 
-  const drawRow = (row: Row): RenderElement => {
+  /** The cell at the right edge of every row, feathered like the left one; the row's content fills up to it. */
+  const rightEdge = (i: number, under: Rgb = slab(i)): RenderElement => <Text backgroundColor={bgFor(featherOf(under), i)}> </Text>
+
+  const drawRow = (row: Row, under: Rgb): RenderElement => {
     const guides = '│ '.repeat(row.depth) // one faint guide per level, in the indent cells
     const lit = litLevel.get(row.key)
     const { glyph, color: glyphColor, a } = glyphFor(row.path, row.kind === 'dir', row.isOpen)
     const state = git.files[row.path]
     const badge = row.kind === 'dir' ? (!row.isOpen && row.count > 0 ? String(row.count) : '') : state ? BADGE[state] : ''
-    const badgeColor: Color = row.kind === 'dir' ? 'subtle' : state ? COLOR[state] : 'text'
-    const nameRoom = rowCols - cells(guides) - 2 - (badge ? cells(badge) + 1 : 0)
+    const isChip = row.kind === 'file' && badge !== ''
+    const badgeCells = isChip ? CHIP_CELLS : cells(badge)
+    const nameRoom = rowCols - cells(guides) - 2 - (badge ? badgeCells + 1 : 0)
     const name = truncateMiddle(row.name, Math.max(1, nameRoom))
     const isTruncated = name !== row.name
-    const pad = Math.max(1, rowCols - cells(guides) - 2 - cells(name) - cells(badge))
+    const pad = Math.max(1, rowCols - cells(guides) - 2 - cells(name) - badgeCells)
     const nameColor: Color | undefined = row.kind === 'dir' ? undefined : state ? COLOR[state] : undefined
     const isStruck = row.isMissing || state === 'deleted'
     const isDim = row.isIgnored || dimKeys.has(row.key) // ignored, or arriving or leaving in a ripple
@@ -930,7 +1032,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
       ? shimmer(name, a)
       : row.kind === 'dir'
         ? [
-            <Text bold dimColor={isDim}>
+            <Text color={hex(pal.folder)} bold dimColor={isDim}>
               {name}
             </Text>,
           ]
@@ -948,28 +1050,29 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
                 {name}
               </Text>,
             ]
+    // each level's guide takes a step along the dusk, faint, so depth reads as color rather than clutter
+    const guideColor = (level: number): string => hex(mix(under, ramp([pal.accent, pal.violet], Math.min(1, level / 4)), pal.isLight ? 0.42 : 0.3))
     return (
-      <Box key={`h:${row.key}`} flexDirection="row" hover={{ backgroundColor: 'subtle' }}>
+      <Box key={`h:${row.key}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
         <Button plain key={row.key} onPress={press(row)} hover={{ bold: true, dimColor: false }}>
-          {Array.from({ length: row.depth }, (_, level) =>
-            level === lit ? (
-              <Text color={cfg.accent}>│ </Text>
-            ) : (
-              <Text color="subtle" dimColor>
-                │{' '}
-              </Text>
-            ),
-          )}
+          {Array.from({ length: row.depth }, (_, level) => (
+            <Text color={level === lit ? hex(pal.accent) : guideColor(level)}>│ </Text>
+          ))}
           <Text color={glyphColor} dimColor={isDim && !a}>
             {glyph}
           </Text>{' '}
           {nameNodes}
         </Button>
         {badge ? <Text>{' '.repeat(pad)}</Text> : null}
-        {badge ? (
-          <Text color={badgeColor} dimColor={row.kind === 'dir'} bold={state === 'conflicted'}>
-            {badge}
+        {badge && isChip && state ? (
+          <Text backgroundColor={hex(mix(under, pal.hues[state], pal.isLight ? 0.16 : 0.22))}>
+            {' '}
+            <Text color={COLOR[state]} bold>
+              {badge}
+            </Text>{' '}
           </Text>
+        ) : badge ? (
+          <Text color={hex(mix(under, ramp([pal.accent, pal.violet], Math.min(1, row.depth / 4)), 0.7))}>{badge}</Text>
         ) : null}
         {isTruncated ? (
           <Box position="absolute" top={0} left={cells(guides) + 2} display="none" hover={{ display: 'flex' }}>
@@ -980,28 +1083,38 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     )
   }
 
-  const drawChange = (path: string, state: GitState): RenderElement => {
-    const { glyph, color: glyphColor, a } = glyphFor(path, false, false)
-    const counts = countsText(git.numstat[path])
-    const room = rowCols - 2 - (counts ? cells(counts) + 1 : 0) - 2
-    const shownPath = shortenPath(path, Math.max(1, room))
-    const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(counts) - 2)
+  const counts = (c: LineCounts | undefined): RenderElement | null => {
+    if (!c) return null
+    if (c.isBinary) return <Text color={silver}>bin</Text>
     return (
-      <Box key={`h:f:${path}`} flexDirection="row" hover={{ backgroundColor: 'subtle' }}>
+      <Text>
+        <Text color={hex(pal.added)}>+{c.added}</Text> <Text color={hex(pal.removed)}>−{c.removed}</Text>
+      </Text>
+    )
+  }
+
+  const drawChange = (path: string, state: GitState, under: Rgb): RenderElement => {
+    const { glyph, color: glyphColor, a } = glyphFor(path, false, false)
+    const countsShown = countsText(git.numstat[path])
+    const room = rowCols - 2 - (countsShown ? cells(countsShown) + 1 : 0) - 2
+    const shownPath = shortenPath(path, Math.max(1, room))
+    const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(countsShown) - 2)
+    return (
+      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
         <Button plain key={`f:${path}`} onPress={() => void mention($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : <Text color={COLOR[state]} strikethrough={state === 'deleted'}>{shownPath}</Text>}
         </Button>
         <Text>{' '.repeat(pad)}</Text>
-        {counts ? <Text dimColor>{counts}</Text> : null}
+        {counts(git.numstat[path])}
         <Text> </Text>
         <Button plain key={`pk:${path}`} onPress={() => void openPeek($, path)} hover={{ bold: true }}>
-          ±
+          <Text color={hex(pal.accent)}>±</Text>
         </Button>
       </Box>
     )
   }
 
-  const drawMatch = (path: string, indices: number[]): RenderElement => {
+  const drawMatch = (path: string, indices: number[], under: Rgb): RenderElement => {
     const { glyph, color: glyphColor, a } = glyphFor(path, false, false)
     const state = git.files[path]
     const badge = state ? BADGE[state] : ''
@@ -1028,7 +1141,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     flush()
     const pad = Math.max(1, rowCols - 2 - cells(shownPath) - cells(badge))
     return (
-      <Box key={`h:f:${path}`} flexDirection="row" hover={{ backgroundColor: 'subtle' }}>
+      <Box key={`h:f:${path}`} flexDirection="row" flexGrow={1} hover={{ backgroundColor: hex(mix(under, toward, pal.lift)) }}>
         <Button plain key={`f:${path}`} onPress={() => void mention($, path)} hover={{ bold: true, dimColor: false }}>
           <Text color={glyphColor}>{glyph}</Text> {a ? shimmer(shownPath, a) : parts}
         </Button>
@@ -1041,20 +1154,24 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const drawDiff = (text: string): RenderElement => {
     const shownText = [...text].length > rowCols ? [...text].slice(0, rowCols - 1).join('') + '…' : text
     if (text.startsWith('+++') || text.startsWith('---') || text.startsWith('diff ') || text.startsWith('index ')) return <Text dimColor>{shownText}</Text>
-    if (text.startsWith('@@')) return <Text color="subtle">{shownText}</Text>
+    if (text.startsWith('@@')) return <Text color={hex(mix(pal.violet, pal.silver, 0.4))}>{shownText}</Text>
     if (text.startsWith('+')) return <Text color="diffAdded">{shownText}</Text>
     if (text.startsWith('-')) return <Text color="diffRemoved">{shownText}</Text>
     return <Text>{shownText}</Text>
   }
 
-  const drawLine = (line: Line): RenderElement => {
+  const drawLine = (line: Line, under: Rgb): RenderElement => {
     switch (line.kind) {
       case 'row':
-        return drawRow(line.row)
+        return drawRow(line.row, under)
       case 'note':
-        return <Text dimColor>{line.text}</Text>
+        return (
+          <Text color={silver} italic>
+            {line.text}
+          </Text>
+        )
       case 'outsideHead':
-        return <Text color="subtle">⋯ outside project</Text>
+        return <Text color={silver}>⋯ outside project</Text>
       case 'outside': {
         const { glyph, color: glyphColor, a } = glyphFor(line.path, false, false)
         const shownPath = shortenPath(line.path, Math.max(1, rowCols - 4), homeDir)
@@ -1067,35 +1184,71 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
           </Box>
         )
       }
-      case 'group':
-        return <Text color="subtle">{line.label}</Text>
+      case 'group': {
+        // a heading with a hairline running out of it
+        const used = cells(line.label) + 1
+        return (
+          <Box flexDirection="row">
+            <Text color={silver} bold>
+              {line.label}
+            </Text>
+            <Text> </Text>
+            {hairRuns(used, Math.max(0, rowCols - used), rowCols, under, false)}
+          </Box>
+        )
+      }
       case 'change':
-        return drawChange(line.path, line.state)
+        return drawChange(line.path, line.state, under)
       case 'match':
-        return drawMatch(line.path, line.indices)
+        return drawMatch(line.path, line.indices, under)
       case 'diff':
         return drawDiff(line.text)
     }
   }
 
-  /** A shown line: the edge cell, the line, its glow tint, and the scrollbar cell at the right edge while the lines overflow. */
-  const wrapLine = (el: RenderElement, i: number, key: string): RenderElement => {
-    const isThumb = i >= thumbStart && i < thumbStart + thumbLen
+  /** A shown line: the rim, the line on its slab and glow, and the scrollbar cell at the right edge while the lines overflow. */
+  const drawShown = (line: Line, s: number): RenderElement => {
+    const i = bodyStart + s
+    const under = lineUnder(s, line)
+    const el = drawLine(line, under)
+    const isThumb = s >= thumbStart && s < thumbStart + thumbLen
+    // the thumb carries the dusk along its length; the track is barely there
+    const barColor = isThumb ? hex(ramp([pal.accent, pal.violet], thumbLen <= 1 ? 0.5 : (s - thumbStart) / (thumbLen - 1))) : hex(mix(under, pal.silver, 0.22))
     return (
-      <Box flexDirection="row" backgroundColor={tintFor(i)}>
-        {edge(key)}
-        {hasBar ? <Box width={rowCols}>{el}</Box> : el}
+      <Box flexDirection="row" backgroundColor={bgFor(under, i)}>
+        {edge(i, line.key, litOf(s), under)}
+        {hasBar ? <Box width={rowCols}>{el}</Box> : <Box flexGrow={1}>{el}</Box>}
         {hasBar ? <Text> </Text> : null}
-        {hasBar ? (
-          <Text color={isThumb ? 'text' : 'subtle'} dimColor={!isThumb}>
-            {isThumb ? '┃' : '│'}
-          </Text>
-        ) : null}
+        {hasBar ? <Text color={barColor}>{isThumb ? '┃' : '│'}</Text> : null}
+        {rightEdge(i, under)}
       </Box>
     )
   }
 
-  // branch row: branch on the left, status on the right
+  /** A cue row: a hairline of light, with the count of rows out of view sitting in it. */
+  const drawCue = (i: number, hidden: number, arrow: '↑' | '↓', isFromRight: boolean): RenderElement => {
+    const under = slab(i)
+    const label = hidden > 0 ? `${arrow} ${hidden} more` : ''
+    const lead = label ? 2 : 0
+    const used = label ? lead + cells(label) + 1 : 0
+    return (
+      <Box flexDirection="row" backgroundColor={bgFor(under, i)}>
+        {edge(i)}
+        {label ? hairRuns(0, lead, cols, under, isFromRight) : null}
+        {label ? <Text color={silver}>{label}</Text> : null}
+        {label ? <Text> </Text> : null}
+        {hairRuns(used, cols - used, cols, under, isFromRight)}
+        <Box flexGrow={1} />
+        {rightEdge(i)}
+      </Box>
+    )
+  }
+
+  // the title row: where the light first lands, its top edge already fading into the terminal
+  const titleUnder = slab(0)
+  const titleRuns = gradientRuns(title, isFocused ? pal.title : pal.titleSoft, 24)
+
+  // branch row: branch on the left, status in a pill on the right
   const dirty = Object.keys(git.files).length
   const left = `⎇ ${git.branch ?? 'HEAD'}`
   const rightParts: string[] = []
@@ -1106,9 +1259,11 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     rightParts.push(dirty > 0 ? `·${dirty}` : '✓')
   }
   const right = rightParts.join(' ')
-  const leftText = truncateMiddle(left, Math.max(4, cols - cells(right) - 1))
-  const headerPad = Math.max(1, cols - cells(leftText) - cells(right))
+  const pillCells = right ? cells(right) + 2 : 0
+  const leftText = truncateMiddle(left, Math.max(4, cols - pillCells - 1))
+  const headerPad = Math.max(1, cols - cells(leftText) - pillCells)
   const rightColor: Color = git.failed ? 'error' : dirty > 0 ? 'warning' : 'success'
+  const rightHue: Rgb = git.failed ? pal.hues.conflicted : dirty > 0 ? pal.hues.modified : pal.hues.clean
 
   // peek row: the file and its counts, pressable to go back
   const peekCounts = peek ? countsText(git.numstat[peek]) : ''
@@ -1117,51 +1272,66 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   // now-editing row: the file Claude has open, with the shimmer; else the one it just closed, dim, for a few seconds
   const nowShown = nowPath !== undefined ? shortenPath(nowPath, Math.max(1, cols - 2 - (current ? 0 : 6)), homeDir) : ''
 
+  // where each header row sits on the slab
+  const secondAt = 1
+  const nowAt = hasSecondRow ? 2 : 1
+  const filterAt = nowAt + (nowPath !== undefined ? 1 : 0)
+
   return (
-    <Box flexDirection="column" paddingRight={PAD_X}>
-      <Box key="h:title" flexDirection="row">
-        {edge()}
-        <Text bold color={e.props.isFocused ? cfg.accent : undefined}>
-          {title}
+    <Box flexDirection="column">
+      <Box key="h:title" flexDirection="row" backgroundColor={bgFor(titleUnder, 0)}>
+        {edge(0, undefined, 0, titleUnder)}
+        <Text bold>
+          {titleRuns.map(r => (
+            <Text color={r.color}>{r.text}</Text>
+          ))}
         </Text>
         <Text>{' '.repeat(titlePad)}</Text>
-        <Text color={e.props.isFocused ? cfg.accent : undefined} dimColor={!e.props.isFocused}>
+        <Text color={isFocused ? hex(pal.accent) : silver} dimColor={!isFocused}>
           {hint}
         </Text>
+        <Box flexGrow={1} />
+        {rightEdge(0, titleUnder)}
         <Box position="absolute" top={0} left={PAD_X} display="none" hover={{ display: 'flex' }}>
           <Text inverse>{shortenPath(root, cols, homeDir)}</Text>
         </Box>
       </Box>
       {view === 'peek' && peek !== null ? (
-        <Box key="h:peek" flexDirection="row">
-          {edge()}
+        <Box key="h:peek" flexDirection="row" backgroundColor={bgFor(slab(secondAt), secondAt)}>
+          {edge(secondAt)}
           <Button plain key="act:back" onPress={() => void closePeek($)} hover={{ bold: true }}>
-            <Text color="subtle">±</Text> <Text color={git.files[peek] ? COLOR[git.files[peek] as GitState] : undefined}>{peekPath}</Text>
+            <Text color={hex(pal.accent)}>±</Text> <Text color={git.files[peek] ? COLOR[git.files[peek] as GitState] : undefined}>{peekPath}</Text>
           </Button>
           {peekCounts ? <Text> </Text> : null}
-          {peekCounts ? <Text dimColor>{peekCounts}</Text> : null}
+          {counts(git.numstat[peek])}
+          <Box flexGrow={1} />
+          {rightEdge(secondAt)}
         </Box>
       ) : git.isRepo ? (
-        <Box flexDirection="row">
-          {edge()}
-          <Text color="subtle">{leftText}</Text>
+        <Box flexDirection="row" backgroundColor={bgFor(slab(secondAt), secondAt)}>
+          {edge(secondAt)}
+          <Text color={silver}>{leftText}</Text>
           <Text>{' '.repeat(headerPad)}</Text>
-          {right ? <Text color={rightColor}>{right}</Text> : null}
+          {right ? pill(right, rightHue, rightColor, slab(secondAt)) : null}
+          <Box flexGrow={1} />
+          {rightEdge(secondAt)}
         </Box>
       ) : null}
       {nowPath !== undefined ? (
-        <Box key="h:now" flexDirection="row" hover={{ backgroundColor: 'subtle' }}>
-          {edge('act:now')}
+        <Box key="h:now" flexDirection="row" backgroundColor={bgFor(slab(nowAt), nowAt)} hover={{ backgroundColor: hex(mix(slab(nowAt), toward, pal.lift)) }}>
+          {edge(nowAt, 'act:now')}
           <Button plain key="act:now" onPress={() => void jumpTo($, nowPath)} hover={{ bold: true, dimColor: false }}>
-            {current ? <Text color={current.isRead ? 'subtle' : 'claude'}>●</Text> : <Text color="subtle">·</Text>}{' '}
+            {current ? <Text color={current.isRead ? readDot : breath}>●</Text> : <Text color={silver}>·</Text>}{' '}
             {current ? shimmer(nowShown, current) : <Text dimColor>last: {nowShown}</Text>}
           </Button>
+          <Box flexGrow={1} />
+          {rightEdge(nowAt)}
         </Box>
       ) : null}
       {hasFilterRow ? (
-        <Box key="h:filter" flexDirection="row">
-          {edge('filter')}
-          <Text color="subtle">› </Text>
+        <Box key="h:filter" flexDirection="row" backgroundColor={bgFor(slab(filterAt), filterAt)}>
+          {edge(filterAt, 'filter')}
+          <Text color={hex(pal.accent)}>› </Text>
           {Input ? (
             <Input
               key="filter"
@@ -1179,35 +1349,43 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
           <Button plain key="act:clear" onPress={() => void toggleFilter($)} dimColor hover={{ dimColor: false }}>
             ×
           </Button>
+          <Box flexGrow={1} />
+          {rightEdge(filterAt)}
         </Box>
       ) : null}
-      <Box flexDirection="row">
-        {edge()}
-        {hiddenAbove > 0 ? <Text dimColor>↑ {hiddenAbove} more</Text> : <Text> </Text>}
-      </Box>
-      {shown.map((line, i) => wrapLine(drawLine(line), i, line.key))}
-      {Array.from({ length: padRows }, () => (
-        <Box flexDirection="row">
-          {edge()}
-          <Text> </Text>
-        </Box>
-      ))}
-      <Box flexDirection="row">
-        {edge()}
-        {hiddenBelow > 0 ? <Text dimColor>↓ {hiddenBelow} more</Text> : <Text> </Text>}
-      </Box>
-      {legendLines.map(items => (
-        <Box flexDirection="row">
-          {edge()}
-          <Box flexDirection="row" columnGap={LEGEND_GAP}>
-            {items.map(l => (
-              <Button plain hotkey={l.hotkey} key={l.key} dimColor={!e.props.isFocused} onPress={l.run}>
-                {l.label}
-              </Button>
-            ))}
+      {drawCue(bodyStart - 1, hiddenAbove, '↑', false)}
+      {shown.map((line, s) => drawShown(line, s))}
+      {Array.from({ length: padRows }, (_, j) => {
+        const i = bodyStart + shown.length + j
+        return (
+          <Box flexDirection="row" backgroundColor={bgFor(slab(i), i)}>
+            {edge(i)}
+            <Text> </Text>
+            <Box flexGrow={1} />
+            {rightEdge(i)}
           </Box>
-        </Box>
-      ))}
+        )
+      })}
+      {drawCue(legendStart - 1, hiddenBelow, '↓', true)}
+      {legendLines.map((items, k) => {
+        // the legend sits on a shelf, a touch brighter than the slab around it
+        const i = legendStart + k
+        const shelf = mix(slab(i), toward, cfg.glass ? pal.shelf : 0)
+        return (
+          <Box flexDirection="row" backgroundColor={bgFor(shelf, i)}>
+            {edge(i, undefined, 0, shelf)}
+            <Box flexDirection="row" columnGap={LEGEND_GAP}>
+              {items.map(l => (
+                <Button plain hotkey={l.hotkey} key={l.key} dimColor={!isFocused} onPress={l.run}>
+                  {l.label}
+                </Button>
+              ))}
+            </Box>
+            <Box flexGrow={1} />
+            {rightEdge(i, shelf)}
+          </Box>
+        )
+      })}
       {/* one row past the body, never shown: it keeps the engine's scroll keys live, and the ui.scroll hook turns them into the pane's own window */}
       {isDocked ? <Text> </Text> : null}
     </Box>

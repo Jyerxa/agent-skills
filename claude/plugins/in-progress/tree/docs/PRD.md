@@ -129,6 +129,7 @@ Configuration (`userConfig` in `plugin.json`; each field is a `/config` row):
 | `compactFolders` | boolean | true | Collapse single-child folder chains. |
 | `accent` | string (hex) | `#D97757` | Color of the glow, the lit guide and the focus edge. |
 | `glow` | boolean | true | Tint the rows around the file Claude is editing. |
+| `glass` | boolean | true | Draw the pane on the tinted glass slab (§5.6). Off, rows sit on the terminal's own background. |
 | `animate` | boolean | true | Ripple rows on fold and unfold. |
 | `icons` | string: `unicode`, `nerd` | `unicode` | Glyph set (later). |
 
@@ -238,7 +239,7 @@ A terminal has no alpha or blur, so glow is simulated with background tints blen
 
 - **Ember glow** (taken). While Claude writes a file: its row carries the strongest tint, the rows one and two away the lighter ones; the `●` breathes through `● ◉ ○` about once a second; the indent guide from the folder down to the file is drawn in the accent. When the edit ends the tint steps down over half a second. Reads do not glow. Config `glow`.
 - **Light pass and settle** (skipped: "over-indexing on the actively edited file").
-- **Glass header or pane** (parked, to revisit).
+- **Glass, "dusk"** (taken 2026-10-10, visual only, no behavior change). The pane is a slab of smoked glass lit from the top-left by the accent, and Claude's attention is light moving through it. Every drawn row gets a background on a smoothstep gradient from a warm wash (dark: `#121212` + 9% accent) to a cool tint (+ 8% violet `#7C6FD8`); the legend sits on a brighter shelf. The edges feather (user feedback: "make the border more transparent so the pane is less abrupt"): the left and right cells of every row show 40% of the slab and the top and bottom rows 60%, the rest the terminal's own `#121212` (the user's Windows Terminal background), so the glass fades in rather than starting at a border. The title is a gradient, ember to lavender, brighter while focused. The cue rows become hairlines fading from the light into the glass, with `↑ N more` / `↓ N more` set in them. Indent guides step along the dusk by depth. Badges are tinted chips; the branch status is a pill with half-block caps. The ember glow becomes a Gaussian bell over each row's own glass (±4 rows, continuous fade) with the rim lit beside it; the shimmer becomes a soft eased band, ember for writes and moonlight for reads; trail dots cool continuously from ember to silver; the scroll thumb carries the dusk; diff lines sit on faint green and red; a fold ripple passes as a faint wash. Hex colors come from one palette per accent and theme (`hooks/color.ts`); state letters and names keep the theme's colors. Config `glass`.
 - **Fold ripple** (taken, widened by the user from a cascade on open to every fold and unfold). Unfolding, the folder's rows arrive top down, each a step after the last, dim for two steps as they land; folding, they leave bottom up and the fold is written only once the last row has gone. The step is 400 ms divided by the row count, clamped to 12 to 40 ms, so a big folder ripples faster per row. A click during a ripple lands it at once and starts the next. Config `animate`. Fold-all, unfold-all and auto-reveal are instant.
 - **Focus cues** (from the user's feedback that hotkeys were landing in the prompt). While the pane holds the keyboard: an accent edge (`▏`) in the left cell of every row, thicker (`▍`) on the row the focus ring is on, the title in the accent color, and `esc to leave` at the right of the title row. Otherwise the edge is blank, the title plain, and the title row reads `ctrl+x tab to focus`, dim. No row is spent.
 
@@ -327,6 +328,7 @@ v1 is M0 through M4. Subagent awareness moved to "Later".
 | 2026-10-10 | Five features pitched one at a time: Changes view with diff peek (in), fuzzy filter (in), focus mode (in), open in editor (skipped), scroll cue with scrollbar and edge counts (in). The diff peek lives inside the tree pane because the engine shows one pane at a time. |
 | 2026-10-10 | Right and top margins removed at the user's request (left cell kept). Five visual pitches, all taken: indent guides, now-editing line, row highlight with focus mark, typographic hierarchy, readable paths. |
 | 2026-10-10 | Text padding restored on both sides; the gap outside the frame is the terminal's own. Delight pitches: ember glow (in), light pass (out), glass (parked), ripple on every fold and unfold (in). Focus cues added from the user's feedback: accent edge, accent title, `esc to leave` / `ctrl+x tab to focus`. |
+| 2026-10-10 | Glass taken off the parked list as a visual-only pass ("dusk": warm top, cool bottom, light as Claude's attention); behavior unchanged; config `glass` to turn the slab off. |
 
 ## Appendix A. Technical design
 

@@ -24,14 +24,15 @@ c: fold  e: unfold
 
 - The working directory's name heads the pane; hover it for the full path. The branch row shows ahead/behind and a dirty count, or `✓` when clean.
 - While Claude has a file open, a pinned line under the header shows it (`● hooks/register.tsx`, shimmering); for a few seconds after, a dim `· last: …`. Click it to jump to the file.
-- Faint indent guides mark each level; folder names are bold; file extensions are dim; hovering a row tints it, and the row holding the keyboard focus carries a `▍` mark at the left edge.
+- **Glass.** The pane is a slab of smoked glass lit from the top by the accent: a warm wash under the title easing into a cool violet at the bottom, and a shelf under the legend. Its outermost cells on every side are only partly glass, so the slab fades into the terminal (`#121212` on a dark theme) instead of ending at a border. The title runs a gradient, ember to lavender. Claude's attention is light moving through it: cool moonlight on a file it reads, an ember on a file it writes, an afterglow that cools as it fades. A terminal has no alpha or blur, so every tint is a color blended from your `accent` over the slab, for a dark or light theme picked from your theme setting; `glass: false` takes the slab away.
+- Indent guides mark each level, each a faint step along the dusk from ember to violet; folder names are bold; file extensions are dim; hovering a row lifts it, and the row holding the keyboard focus carries a `▍` mark at the left edge.
 - Long paths show your home folder as `~` and elide their middle (`~/.claude/dev-mods/…/tree/README.md`); hover shows the whole path.
-- **Ember glow.** While Claude writes a file, its row and the two rows above and below carry a warm tint in the accent color, the `●` breathes, and the guide from the folder down to the file lights up; the glow fades out over half a second when the edit ends.
-- **Fold ripple.** Click a folder and its rows ripple out bottom-up before it folds, or ripple in top-down as it unfolds; under half a second however big the folder.
-- **Focus cues.** While the pane holds the keyboard, an accent edge runs down its left side, the title turns the accent color, and the title row says `esc to leave`; otherwise it says `ctrl+x tab to focus`, dim. The thick segment of the edge marks the row the keyboard focus is on.
-- `●` and a sweeping highlight: Claude is editing (or reading, muted) this file right now.
-- `·`: Claude touched it earlier this session; the dot fades over two minutes.
-- Name color and the letter at the right edge follow git: `M` modified, `S` staged, `A` added, `?` untracked, `D` deleted, `R` renamed, `!` conflicted.
+- **Ember glow.** While Claude writes a file, a soft bell of light in the accent color sits over its row and fades across the four rows either side, the rim beside it lights, the `●` breathes in glyph and color, and the guide from the folder down to the file lights up; the glow fades out smoothly over half a second when the edit ends.
+- **Fold ripple.** Click a folder and its rows ripple out bottom-up before it folds, or ripple in top-down as it unfolds, a faint wash of light passing with them; under half a second however big the folder.
+- **Focus cues.** While the pane holds the keyboard, a light pipe runs down its left side, ember at the top to violet at the bottom, the title's gradient brightens, and the title row says `esc to leave`; otherwise it says `ctrl+x tab to focus`, dim. The thick segment of the edge marks the row the keyboard focus is on.
+- `●` and a soft band of light sweeping through the name: Claude is editing (ember) or reading (moonlight) this file right now.
+- `·`: Claude touched it earlier this session; the dot cools from ember through violet to a faint silver over two minutes.
+- Name color and the chip at the right edge follow git: `M` modified, `S` staged, `A` added, `?` untracked, `D` deleted, `R` renamed, `!` conflicted. The branch row's status sits in a pill tinted the same way.
 - A folded folder shows how many changed files it holds.
 
 ## Requirements
@@ -80,7 +81,7 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 
 Hover a row to light it; hover a truncated name to see it whole.
 
-The key legend is always pinned to the bottom of the pane, dim until the pane has the keyboard. Docked, the pane scrolls its own rows between the header and the legend, so both stay put as you wheel or arrow through a long tree; a slim scrollbar on the right and `↑ N more` / `↓ N more` lines at the edges show what's off screen.
+The key legend is always pinned to the bottom of the pane, dim until the pane has the keyboard. Docked, the pane scrolls its own rows between the header and the legend, so both stay put as you wheel or arrow through a long tree; a slim scrollbar on the right, its thumb carrying the dusk gradient, and `↑ N more` / `↓ N more` set into the hairlines at the edges show what's off screen.
 
 The diff peek opens inside the tree pane rather than beside it: Claude Code shows one pane at a time, and a second pane would become a tab hiding the tree.
 
@@ -95,11 +96,12 @@ Each field is a row in `/config` under the plugin's name.
 | `openOnStart` | true | Open the pane when a session starts. |
 | `followClaude` | true | Unfold and scroll to the file Claude is editing. |
 | `readsShimmer` | true | Shimmer (muted) on Read as well as on writes. |
-| `shimmer` | `sweep` | `sweep`, `pulse` (bold blink, for reduced motion) or `off`. |
+| `shimmer` | `sweep` | `sweep`, `pulse` (the name breathes in color once a second, for reduced motion) or `off`. |
 | `showIgnored` | false | Show gitignored entries, dimmed. |
 | `compactFolders` | true | Draw single-child folder chains on one row. |
-| `accent` | `#D97757` | Hex color for the glow, the lit guide and the focus edge. The glow's tints are blended from it toward a dark or light pane background, picked from your theme setting. |
-| `glow` | true | Tint the rows around the file Claude is editing. |
+| `accent` | `#D97757` | Hex color the pane's light comes from: the glass's warm top, the title gradient, the glow, the lit guide and the focus edge. The cool end of the gradient is a fixed violet. |
+| `glow` | true | Light the rows around the file Claude is editing. |
+| `glass` | true | Draw the pane on the tinted glass slab. Off, rows sit on the terminal's own background; type colors, chips and the glow stay. |
 | `animate` | true | Ripple rows when a folder opens or closes. |
 
 ## How it stays cheap

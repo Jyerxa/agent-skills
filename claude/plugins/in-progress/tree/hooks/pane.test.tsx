@@ -272,6 +272,26 @@ test('visual polish: indent guides, dim extensions, bold folders, the cursor mar
   await focused.unmount()
 })
 
+test('the glass: every row sits on a hex slab, warm at the top and cool at the bottom, with the badge as a chip', async ($, on) => {
+  world(on, [], [], {})
+  await start($)
+  const ui = await mountTree($)
+  const rows = (await ui.findAll({ type: 'Box' })).map(b => b.props['backgroundColor']).filter((c): c is string => typeof c === 'string')
+  expect(rows.length > 30, 'the slab reaches every row of the body').toBe(true)
+  expect(rows.every(c => /^#[0-9a-f]{6}$/.test(c))).toBe(true)
+  const red = (hex: string) => parseInt(hex.slice(1, 3), 16)
+  const blue = (hex: string) => parseInt(hex.slice(5, 7), 16)
+  const near = rows[1] as string // the first row under the title, which fades into the terminal at its top edge
+  expect(rows.some(c => red(c) < red(near) && blue(c) > blue(near)), 'warm at the top, cool further down').toBe(true)
+  const chip = await ui.find({ type: 'Text', text: ' M ' })
+  expect(typeof chip?.props['backgroundColor'], 'the badge sits on a tinted chip').toBe('string')
+  expect(await ui.find({ type: 'Text', text: '▐' }), 'the status pill has its caps').toBeDefined()
+  expect((await ui.findAll({ type: 'Text', text: '─' })).length > 0, 'hairlines in the cue rows').toBe(true)
+  const title = await ui.find({ type: 'Text', text: 'repo' })
+  expect(title?.props['bold'], 'the title stays bold over its gradient').toBe(true)
+  await ui.unmount()
+})
+
 test('the now-editing line lingers as "last:" after an Edit and jumps to the file when pressed', async ($, on) => {
   const writes: Write[] = []
   world(on, [], writes, {})

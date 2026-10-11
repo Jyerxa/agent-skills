@@ -58,13 +58,19 @@
     "accent": {
       "type": "string",
       "title": "Accent color",
-      "description": "Hex color for the glow around the file Claude is editing and the lit guide leading to it.",
+      "description": "Hex color the pane's light comes from: the glass's warm top, the glow around the file Claude is editing, the lit guide and the focus edge.",
       "default": "#D97757"
     },
     "glow": {
       "type": "boolean",
       "title": "Ember glow",
-      "description": "Tint the rows around the file Claude is editing, fading out when the edit ends.",
+      "description": "Light the rows around the file Claude is editing, fading out when the edit ends.",
+      "default": true
+    },
+    "glass": {
+      "type": "boolean",
+      "title": "Glass",
+      "description": "Draw the pane on a slab of tinted glass, warm at the top and cool at the bottom. Off, rows sit on the terminal's own background.",
       "default": true
     },
     "animate": {
