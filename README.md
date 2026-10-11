@@ -56,6 +56,22 @@ an [offline animated viewer](skills/visualize-process/fixtures/workshop.html), a
 a [conditional improvement assessment](skills/improve-process/fixtures/workshop-improvements.md).
 Download the HTML and open it locally; no site or server is required.
 
+## Plugins
+
+Claude Code plugins live under `claude/plugins/`; ones still taking shape sit
+in `claude/plugins/in-progress/` and move up once they settle. This repo is
+also a plugin marketplace, so one line inside Claude Code installs any of them:
+
+```
+/plugin install tree --marketplace jyerxa/agent-skills
+```
+
+| Plugin | Description |
+| --- | --- |
+| [`tree`](claude/plugins/in-progress/tree) | A live file tree pane beside the transcript: the whole working directory, git status colors and badges, and a shimmer on the file Claude is editing. Needs the fullscreen terminal layout (`/tui fullscreen`). |
+
+To run one from a checkout without installing: `claude --plugin-dir claude/plugins/in-progress/tree`.
+
 ## Layout
 
 Every skill is a folder under `skills/` containing a `SKILL.md` (name +
@@ -68,6 +84,15 @@ skills/
   <skill-name>/
     SKILL.md
     references/   (optional supporting files)
+claude/
+  plugins/
+    in-progress/          (plugins still taking shape)
+      <plugin-name>/
+        .claude-plugin/plugin.json
+        hooks/            (hooks.json and the hooks module, with its tests)
+        types/            (the plugin's state contract)
+        docs/             (PRD and design notes)
+.claude-plugin/marketplace.json   (lists the plugins for /plugin install)
 ```
 
 ## License

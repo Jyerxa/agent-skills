@@ -1,0 +1,77 @@
+{
+  "name": "tree",
+  "version": "0.1.0",
+  "description": "A live file tree pane: the whole working directory, git status colors, and a shimmer on the file Claude is editing.",
+  "author": { "name": "jeremiah" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "side": {
+      "type": "string",
+      "title": "Dock side",
+      "description": "Preferred side for the pane. This Claude Code build docks panes on the right; the setting applies once a build lets a plugin choose.",
+      "options": ["left", "right"],
+      "default": "left"
+    },
+    "columns": {
+      "type": "number",
+      "title": "Width",
+      "description": "Requested dock width in columns.",
+      "default": 32
+    },
+    "openOnStart": {
+      "type": "boolean",
+      "title": "Open at start",
+      "description": "Open the pane when a session starts in a fullscreen terminal.",
+      "default": true
+    },
+    "followClaude": {
+      "type": "boolean",
+      "title": "Follow Claude",
+      "description": "Expand and scroll to the file Claude is editing.",
+      "default": true
+    },
+    "readsShimmer": {
+      "type": "boolean",
+      "title": "Shimmer on reads",
+      "description": "Shimmer (muted) while Claude reads a file, not only while it writes.",
+      "default": true
+    },
+    "shimmer": {
+      "type": "string",
+      "title": "Shimmer style",
+      "description": "sweep: a bright window moves across the name; pulse: the name blinks bold once a second; off: static highlight.",
+      "options": ["sweep", "pulse", "off"],
+      "default": "sweep"
+    },
+    "showIgnored": {
+      "type": "boolean",
+      "title": "Show ignored",
+      "description": "Show gitignored entries, dimmed.",
+      "default": false
+    },
+    "compactFolders": {
+      "type": "boolean",
+      "title": "Compact folders",
+      "description": "Draw a chain of single-child folders on one row (src/main/java).",
+      "default": true
+    },
+    "accent": {
+      "type": "string",
+      "title": "Accent color",
+      "description": "Hex color for the glow around the file Claude is editing and the lit guide leading to it.",
+      "default": "#D97757"
+    },
+    "glow": {
+      "type": "boolean",
+      "title": "Ember glow",
+      "description": "Tint the rows around the file Claude is editing, fading out when the edit ends.",
+      "default": true
+    },
+    "animate": {
+      "type": "boolean",
+      "title": "Animate folds",
+      "description": "Ripple rows in and out when a folder opens or closes.",
+      "default": true
+    }
+  }
+}
