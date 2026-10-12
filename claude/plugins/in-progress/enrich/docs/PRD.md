@@ -1,14 +1,19 @@
-# PRD: Enrich, a prompt-enrichment pass for Claude Code
+# PRD: Enrich, a prompt-improvement pass for Claude Code
 
-**Version** 0.1, approved 2026-10-11
+**Version** 0.2, approved 2026-10-12. It replaces v0.1's review-card design; §10 says why.
 **Author** jeremiah, drafted with Claude
-**Target stack** Claude Code 2.1.296 function-hooks plugin ("mod"): a TypeScript/JSX hooks module drawn on the Ink terminal surface; model calls through the engine's own client (`$.model.complete`, `$.model.fork`)
+**Target stack** Claude Code 2.1.296 function-hooks plugin ("mod"): a TypeScript/JSX hooks module. Model calls go through the engine's own client (`$.model.complete`, `$.model.fork`).
 
 ## 1. Overview
 
-Claude does better with a prompt that says what the goal is, what it should know, what "done" looks like and what is still undecided. In practice the person types fast: a one-line ask with a typo, or a brain dump of half-formed thoughts with "maybe" and "idk" in it. Writing the structured version by hand every time is exactly the work they are trying to skip.
+Claude does better with a prompt that states the goal, what it should know, what "done" looks like and what is still undecided. In practice the person types fast. Sometimes that's a one-line ask with a typo. Sometimes it's a brain dump of half-formed thoughts, with "maybe" and "idk" in it.
 
-Enrich keeps Enter as it is (send the draft as typed) and adds one chord, `ctrl+x e`, that sends the draft through an enrichment pass first. A model rewrites the draft into a well-structured prompt, sized to what was typed. It never invents requirements: what is missing becomes a short list of open questions. The result appears in a card directly above the prompt box, where Claude Code shows plan approvals. From the card the person sends it, edits it in the prompt box, refines it with feedback, answers its open questions, or restores what they wrote.
+Enrich adds two chords to the prompt box. Enter still sends the draft as typed.
+
+- **`ctrl+x e`, quick pass.** Tidies the draft: fixes spelling, makes the ask explicit, and turns several asks into a list. The size and shape stay the same, and it takes a few seconds.
+- **`ctrl+x d`, deep pass.** Rewrites the draft with the whole conversation in view, as a structured prompt (Goal, Context, Done when, and so on). It lists what it couldn't know as open questions.
+
+Either way, the improved prompt replaces the draft in the prompt box. The person reads it there, edits it like any prompt, and presses Enter. Pressing the same chord again puts the original back. There is no card, panel or button to learn, and nothing is drawn above the prompt.
 
 Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in-progress/enrich` in the `agent-skills` repo.
 
@@ -16,145 +21,123 @@ Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in
 
 ### Goals
 
-- **Enter is untouched.** Sending as-is costs nothing and changes nothing. Enrichment is opt-in per prompt, one chord away.
-- **Right-sized.** A clear one-liner comes back nearly unchanged; a brain dump comes back with sections. Structure is earned by content, never padded.
-- **Never invents.** Every requirement in the result traces to the draft, the repository, the person's house style or (in context mode) the conversation. Gaps are asked, not guessed.
-- **Never loses text.** Whatever happens (cancel, error, reload, `/clear`), the original draft is one key or one command away.
-- **Reviewable like a plan.** The enriched prompt is rendered as Markdown in a card the person reads before anything is sent.
-- **Fast by default.** A one-shot call on a fast model with a small repository snapshot. Full conversation context is a setting, or one key on a single card.
-- **Quiet.** No timers and no per-keystroke work while idle. The only idle footprint is a few dim words on the hint line under the prompt while a draft is typed.
+- **Enter is untouched.** Sending as-is costs nothing and changes nothing.
+- **Two chords, nothing else.** The whole interaction is: type, chord, read, edit, Enter.
+- **The result lands in the prompt box.** The person already knows how to edit and send there, and `@mentions` and pasted images work as they always do.
+- **Never invents.** Every requirement in the result traces to the draft, the person's house style or the conversation. Gaps are asked, not guessed.
+- **Never loses text.** The draft stays in the box until the result replaces it. The same chord puts it back, and `/enrich original` brings it back later.
+- **Quiet.** No timers run while idle. The only thing drawn is a few dim words on the hint line while a draft is typed.
 
 ### Non-goals
 
-- Not a prompt library or template manager.
-- No editing inside the card. Plugin text fields are single-line; editing happens in the real prompt box (§4.3).
-- No composer lint (underlining vague words while typing). Pitched and skipped on 2026-10-11; listed under Later.
-- No automatic enrichment. The plugin never rewrites a prompt the person sent with Enter.
-- No remote surfaces in v1 beyond what the desktop surface gives for free (§6.5).
+- No review card or panel. v0.1 had one; it was dropped on 2026-10-12 as too much to learn.
+- No refine loop. To change the result, edit the text or run a pass again.
+- No answer UI. Open questions are plain text at the end of the prompt. Answer them inline, delete them, or send them and let Claude ask.
+- No automatic enrichment, no composer lint, no prompt library.
 
 ## 3. Personas
 
-- **The brain-dumper.** Types a paragraph of loosely connected thoughts while thinking out loud, and wants it turned into something Claude can act on without losing anything they said.
-- **The one-liner.** Fires short asks between tasks ("fix the flaky test"). Wants the occasional nudge of a goal and a definition of done, without being slowed down on prompts that were already fine.
+- **The brain-dumper.** Types a paragraph of loosely connected thoughts while thinking out loud. Wants it turned into something Claude can act on, without losing anything they said. Reaches for `ctrl+x d`.
+- **The one-liner.** Fires short asks between tasks ("fix the flaky test"). Wants the typos and the vague verb fixed without being slowed down. Reaches for `ctrl+x e`, or just Enter.
 
 ## 4. Functional requirements
 
-### 4.1 Trigger and take-out
+### 4.1 Chords
 
-- F1. Enter submits the draft exactly as today. The plugin observes submissions but never changes or drops one.
-- F2. `ctrl+x e` with a non-empty draft starts enrichment. The chord reaches the plugin through a Button whose `action` names a borrowed engine keybinding action (default `diff:back`, config `triggerAction`), which the person binds to `ctrl+x e` in the Chat context (§4.9, §7, A.11). The Button lives in the hint line under the prompt (`PromptHint`), drawn only while a draft is typed or a card is up. M0 confirms this host; the fallback host is a one-line band hint.
-- F3. Drafts that are commands or modes are refused with a toast and left untouched: a leading `/` (slash command), `!` (bash mode) or `#` (memory). An empty draft with no card up toasts `nothing to enrich`.
-- F4. Take-out: the draft's text and cursor are saved to session state and to `$.store` (key `last`), then the prompt box is emptied with `$.prompt.fill({ text: '' })`. If the box refuses (a dialog holds the keys), nothing is taken and a toast says why.
-- F5. The card appears in the enriching state at once (§5.2), with the original dimmed and `1: Cancel`. Cancel puts the draft back in the box.
-- F6. Fallbacks that work without any keybinding: `/enrich <text>` enriches the given text as if it had been the draft; and `/enrich restore` (F44).
+- F1. Enter submits the draft exactly as today. The plugin never changes or drops a submission.
+- F2. `ctrl+x e` starts a quick pass and `ctrl+x d` starts a deep pass on the draft in the box.
+  - Plugins cannot register keybinding actions. Each chord therefore reaches the plugin through a Button in the hint line under the prompt (`PromptHint`). The Button's `action` names a borrowed engine keybinding action: `diff:back` for quick and `diff:nextSource` for deep (config `quickAction`, `deepAction`).
+  - The person binds the two chords once, in the Chat context (F21).
+  - The Buttons are mounted only while the box holds a draft or a pass is running.
+- F3. While a draft is typed, the hint line shows the chords at its right end (§5.1). Each label can also be clicked. That is how the desktop app runs a pass, since chords work only in the terminal.
+- F4. Drafts that are commands or modes are refused with a toast and left untouched: anything starting with `/`, `!` or `#`. On an empty box the chords do nothing.
 
-### 4.2 The card
+### 4.2 While a pass runs
 
-- F7. The card draws in the band directly above the prompt (`AbovePrompt`), as wide as the transcript column, with a rounded border in the `claude` accent. While a survey holds the band (`hasSurvey`) the card steps aside and keeps its state; it returns when the survey ends.
-- F8. Header, in the top border: `✦ <state>` and the revision on the left; on the right the brain and model (`fast · sonnet`, `context · opus`) and the size change (`228 → 557 chars`). In context mode the right side shows cache-read tokens instead of the size (`cache 41.2k`).
-- F9. The button row is the first row inside the card, before the body, so the digits always work: the engine only arms digit hotkeys on Buttons wholly inside the band's visible window. Body below: the enriched prompt drawn with the `Markdown` element. Last row: the model's one-line notes, dim.
-- F10. Digit hotkeys work from the empty prompt box (the engine routes a bare digit typed into an empty composer to the band's Buttons), and every Button is also clickable. While the person has typed something in the box, digits type as usual.
-- F11. A card taller than the band's room scrolls inside the band (wheel, or arrows after `ctrl+x tab`); a dim `↓ more` cue marks hidden rows.
+- F5. The draft stays in the box, untouched. The hint line shows the pass and the elapsed seconds: `✦ deep pass · 6s · ⌃x d cancel`.
+- F6. Either chord cancels the running pass. The draft is left as it is, and a result that arrives late is dropped.
+- F7. The person may keep typing, or send the draft with Enter, while a pass runs. The result is applied only if the box still holds exactly the text the pass started from. Otherwise the box is left alone and a toast says `draft changed, result not applied (/enrich last)`.
+- F8. A pass may run while a Claude turn is running; both brains work mid-turn (M0, S11).
 
-### 4.3 Send, Edit, Original
+### 4.3 The result
 
-- F12. **1: Send** submits the enriched text as the person's own words (`$.prompt.submit({ text, asUser: true })`), after writing it to `last`. The card closes.
-- F13. **2: Edit** puts the enriched text in the prompt box (`$.prompt.fill`, replace) and closes the card. The person edits there, with `ctrl+g` for their external editor, and sends with Enter. `ctrl+x e` on that text starts a fresh enrichment.
-- F14. **3: Original** puts the original draft back in the box and closes the card. It is the card's way out; there is no separate close button. The cursor lands at the end of the text; the engine's fill does not take a cursor position.
-- F15. Mentions and pastes: the engine does not expand `@file` mentions or attach pasted images for a prompt a plugin submits. When the draft holds an `@mention` or a paste placeholder (`[Image #1]`, `[Pasted text #1 …]`), the card shows a warning row and draws **2: Edit** as the primary button (§5.7). Send still works and sends the text as written. M0 checks whether placeholders still bind to their attachments after Edit or Original.
-- F16. Where the surface has no prompt box (`no_composer`), Edit and Original copy the text to the clipboard and toast `copied`.
+- F9. The result replaces the box's text (`$.prompt.fill`, replace), with the cursor at the end. Until the person's first edit, the hint line says what happened and shows what the two chords now do: `✦ quick · 228 → 239 chars · ⌃x e undo · ⌃x d deep`.
+- F10. **Undo.** While the box still holds the untouched result, the same chord puts the original draft back. The other chord runs its own pass on the original draft rather than on the result, so running quick then deep doesn't compound.
+- F11. Once the person edits the result, both chords treat the box as it stands, like any draft.
+- F12. **Verbatim check.** After each pass, the plugin checks that every `@mention`, path, inline code span, URL and paste placeholder in the draft survived.
+  - If one is missing, the hint line names it, for example `⚠ dropped @hooks/register.tsx`.
+  - The result is still applied, because undo is one chord away.
+- F13. If the pass fails (an API error, an empty reply or a timeout), the box is untouched and a toast names the reason.
+- F14. Every result and its original are written to `$.store` (key `last`). `/enrich original` puts the last original back in the box, and `/enrich last` puts back the last result. Both work even after a restart.
 
-### 4.4 Refine
+### 4.4 Quick and deep
 
-- F17. With a card up and text in the prompt box, `ctrl+x e` treats that text as feedback: it is taken out of the box, shown in the card as `↻ <feedback>`, and the model revises the current revision. The result is the next revision (`rev 2`, `rev 3`, …).
-- F18. With a card up and the box empty, `ctrl+x e` regenerates: the model polishes the current revision and weaves any `## Decisions` (F22) into the sections they belong to.
-- F19. A failed or cancelled refine returns to the previous revision and puts the feedback back in the box. Up to 8 revisions are kept; the card shows the newest.
+| | Quick, `ctrl+x e` | Deep, `ctrl+x d` |
+|---|---|---|
+| Call | One `$.model.complete` | One `$.model.fork`, which runs on the session's model and system prompt and reads the whole conversation from the main thread's prompt cache |
+| Model | `quickModel` (default `sonnet`) at `quickEffort` (default `low`) | The session's own. With nothing to fork yet (the first prompt, or just after `/clear`), it falls back to one `$.model.complete` on `deepFallbackModel` (default `opus`), and the hint line says `deep · opus` |
+| Sees | The draft and the house style | The draft, the house style and the conversation |
+| Does | Fixes spelling and grammar. Makes the ask explicit. Turns several asks into a short list, with no headings. Keeps hedges as written. Stays about the same length. | Uses sections, but only those with real content, in this order: Goal, Context, Requirements, Done when, Out of scope, Open questions. Resolves "the bug above" or "that file" into real names. A hedge that changes the work becomes an open question. |
+| Typical time | 2–5 s | 10–30 s, longer on long sessions |
 
-### 4.5 Answer open questions
+### 4.5 What a pass may do
 
-- F20. When the current revision has an `## Open questions` section, the card offers **4: Answer (n)**. It switches the card to one question per row, each with a one-line answer field under it, the first unanswered field focused (§5.5).
-- F21. Fields need the keyboard, and a plugin cannot move the keyboard into the band by itself (the engine denies `$.ui.focus` unless the band already holds the keys). Two ways in; M0 picks the default (config `answerIn`):
-  - `band`: the card shows `ctrl+x tab to type` until the person focuses the band;
-  - `pane`: the questions open in a pane with `focus`, which the engine grants while the prompt box is empty (docked on the right in the fullscreen layout, inline above the prompt otherwise).
-- F22. Enter moves to the next field; Enter on the last folds the answers into the prompt locally, with no model call: each answered question moves to a `## Decisions` section as `- <question> → <answer>`, unanswered ones stay under Open questions, and the section disappears when none are left. The result is the next revision. `2: Back` returns to the card without folding.
+The full instructions are in A.6. The contract:
 
-### 4.6 Brains
+- F15. Rewrite, never answer. The output is a prompt for Claude Code to act on, not a reply to it.
+- F16. Never invent. No requirement, file, name, number, constraint or technology without a source in the draft, the house style or the conversation.
+- F17. Keep these verbatim: `@mentions`, paths, identifiers, inline code, code blocks, URLs, error text, quotes and paste placeholders.
+- F18. Keep the author's voice: first person and their terms, with spelling fixed. No pleasantries and no commentary about the rewrite.
+- F19. Deep only:
+  - at most 5 open questions, each answerable in a few words, always the last section;
+  - length at most the larger of 600 characters and 3× the draft, or 1.5× the draft plus 1,500 for drafts over 1,000 characters.
 
-- F23. Config `mode`: `fast` (default) or `context`.
-- F24. **fast**: one `$.model.complete` call on config `model` (default `sonnet`, any alias or model id), `effort` (default `low`), `maxTokens` (default 2048), `timeoutMs` (default 45000). The system prompt holds the enrichment rules and house style, marked for the prompt cache; the user message holds the repository snapshot (F26) and the draft.
-- F25. **context**: one `$.model.fork` call. It runs on the session's own model and system prompt and sees the whole conversation through the main thread's prompt cache, so it can resolve "the bug above" or "that file" into real names (§5.6). The enrichment rules go inside the fork's prompt. On a session's first prompt (or right after `/clear`) the engine reports `nothing-to-fork`; the call falls back to fast mode and the header says `context → fast`.
-- F26. Repository snapshot (fast mode, config `snapshot`, default on), capped at config `contextChars` (default 12000): working directory relative to the repository root; `git` branch and short status (at most 40 lines); the top-level listing (at most 60 entries); and the CLAUDE.md files that apply (project, local, parent directories, and the person's own). Git runs read-only.
-- F27. **5: Full context**, shown only in fast mode, re-runs the original draft through the context brain as the next revision.
-- F28. While a call runs, the header counts elapsed seconds. A call past `timeoutMs` ends in the error state (§5.8) with `1: Retry`, `3: Original` and `5: Full context` or `5: Fast`.
-- F29. Cost is visible: the notes row ends with the call's tokens, dim (`in 3.1k · out 410`), plus cache reads in context mode.
+### 4.6 House style
 
-### 4.7 What enrichment does
+- F20. Standing preferences can be written in Markdown and are appended to the instructions for both passes:
+  - `~/.claude/enrich.md` (the person's);
+  - `<repository root>/.claude/enrich.md` (the project's), which wins where the two conflict.
 
-The full instructions are in A.7. The contract:
+  They are read on every pass, so edits apply at once. Config `houseStyle` turns both off. Examples: "acceptance criteria as checkboxes", "always name the test to add".
 
-- F30. Rewrite, never answer. The output is a prompt for Claude Code to act on, not a reply to it.
-- F31. Right-size by tier:
-  - a clear one-liner gets fixes only, no headings, and coming back nearly unchanged is a good result;
-  - a paragraph becomes one tight paragraph, plus a short requirements list if there are several asks;
-  - a brain dump (several threads, or about 120 words or more) gets sections, only those with real content, in this order: Goal, Context, Requirements, Done when, Out of scope, Open questions;
-  - a question stays a question.
-- F32. Never invent. No requirement, file, name, number, constraint or technology without a source in the draft, the snapshot, the house style or the conversation. A hedge that changes what gets built ("maybe q should close it") becomes an open question; a mild one stays as written. At most 5 open questions, each answerable in a few words, always the last section.
-- F33. Verbatim: `@mentions`, paths, identifiers, inline code, code blocks, URLs, error text, quotes and paste placeholders. After each call the plugin checks that every such token in the draft survived and lists any that did not as a warning row.
-- F34. The author's voice: first person, their terms, spelling fixed, no pleasantries or meta talk.
-- F35. Length: at most the larger of 600 characters and 3× the draft; above 1,000 characters of draft, at most 1.5× the draft plus 1,500.
+### 4.7 Commands and configuration
 
-### 4.8 House style
+- F21. Commands:
+  - `/enrich` prints help: both chords and whether each is bound.
+  - `/enrich keys` reports the binding status and prints the snippet to add.
+  - `/enrich keys install` merges both bindings into the Chat context of `~/.claude/keybindings.json`, respecting `CLAUDE_CONFIG_DIR`.
+    - It never replaces the file, and it writes a `.bak` first.
+    - It adds `$schema` and `$docs` when it creates the file.
+    - It refuses a chord that is already bound to something else, and names what.
+- F22. `/enrich original` and `/enrich last` (F14).
+- F23. While a chord is unbound, the hint line says so in place of the chords (§5.5).
 
-- F36. Optional standing preferences in Markdown, appended to the enrichment instructions: `~/.claude/enrich.md` (the person's) and `<repository root>/.claude/enrich.md` (the project's). Where they conflict, the project's wins. Examples: "acceptance criteria as checkboxes", "always name the test to add".
-- F37. Read at the start of each call, so edits apply at once. Config `houseStyle` turns both off.
-
-### 4.9 Commands and configuration
-
-- F38. `/enrich` with no arguments prints help: the chord, its binding status, the current mode and model.
-- F39. `/enrich <text>` enriches the text (F6).
-- F40. `/enrich keys` reports whether the trigger action is bound and prints the snippet to add.
-- F41. `/enrich keys install` merges `"ctrl+x e": "<triggerAction>"` into the Chat context of `~/.claude/keybindings.json` (`CLAUDE_CONFIG_DIR` respected). It never replaces the file: it writes a `.bak` first, adds `$schema` and `$docs` when it creates the file, and refuses when `ctrl+x e` is already bound to something else, naming what.
-- F42. While no chord is bound, the hint line says so in place of the chord (§5.9).
-
-Configuration (userConfig, each a row in the config menu):
+Configuration (`userConfig`, each a row in the config menu):
 
 | Field | Default | Meaning |
 |---|---|---|
-| `mode` | `fast` | `fast` or `context` (F23–F25) |
-| `model` | `sonnet` | Fast-mode model, an alias or full model id |
-| `effort` | `low` | Fast-mode effort, `low` to `max` |
-| `maxTokens` | 2048 | Cap on the enriched reply |
-| `timeoutMs` | 45000 | Give up after this long |
-| `triggerAction` | `diff:back` | The engine action the chord is bound to (A.11) |
-| `hint` | `draft` | When the hint line shows the chord: `draft`, `always`, `off` |
-| `answerIn` | set by M0 | `band` or `pane` (F21) |
-| `sendHotkey` | `true` | `false` removes the digit from Send, so it can only be clicked |
-| `snapshot` | `true` | Send the repository snapshot in fast mode |
-| `contextChars` | 12000 | Snapshot budget |
+| `quickModel` | `sonnet` | Quick-pass model, an alias or a full model id |
+| `quickEffort` | `low` | Quick-pass effort, `low` to `max` |
+| `deepFallbackModel` | `opus` | Deep pass when there is no conversation to fork |
+| `timeoutMs` | 90000 | Give up after this long |
+| `quickAction` | `diff:back` | The engine action `ctrl+x e` is bound to (A.8) |
+| `deepAction` | `diff:nextSource` | The engine action `ctrl+x d` is bound to (A.8) |
 | `houseStyle` | `true` | Read the house style files |
 
-### 4.10 Never losing text
+### 4.8 Later
 
-- F43. Every take-out and every revision is written to `$.store` key `last` (the original draft and the newest revision), so it survives a crash or restart.
-- F44. `/enrich restore` reopens the last card from the store, so Send, Edit and Original are available again.
-- F45. A hot reload while a call runs leaves the card in the error state, `interrupted by reload`, with Retry. `/clear` cancels a running call; the card stays, with Retry and Original.
-- F46. A prompt the person sends with Enter while a card is up goes through untouched. The card stays and a one-time toast says it is still waiting.
-
-### 4.11 Later
-
-- Composer lint: faint underlines on vague phrases and the biggest gap named in the hint line (skipped for v1 on 2026-10-11).
-- Stepping back through revisions (`[` and `]` while the band is focused).
-- A diff of original and enriched text.
-- A grounded brain: a read-only subagent that opens the files the draft mentions before rewriting (offered and not chosen on 2026-10-11).
-- History: `/enrich history` lists recent enrichments per project.
+- A review card, v0.1's design, as an opt-in for people who want to read the result before the box changes.
+- Refining with typed feedback.
+- Composer lint.
+- A grounded deep pass: a read-only subagent opens the files the draft mentions before rewriting.
+- A repository snapshot (git status, top-level listing, CLAUDE.md) for the quick pass and the deep fallback.
+- `/enrich history`.
 
 ## 5. Visual design
 
-The examples use one real draft about this repository's `tree` plugin, typed the way drafts usually are. The card is 72 columns here; it takes the transcript column's width. Borders and the header's `✦` are the `claude` accent; the notes row and the dimmed original are dim text; a warning row uses `warning`; the primary button is drawn in the accent.
+The examples use one real draft about this repository's `tree` plugin, typed the way drafts usually are. Only the hint line under the prompt changes. The plugin's words are dim, and `✦` is in the `claude` accent.
 
-### 5.1 Typing: the hint line
-
-The engine's own hint line keeps its pills; the plugin adds the chord at the right end while a draft is typed.
+### 5.1 Typing
 
 ```
   …transcript…
@@ -163,306 +146,188 @@ The engine's own hint line keeps its pills; the plugin adds the chord at the rig
   we make it rember where i was, per file probably. also maybe q should
   close it from the prompt too not just when the pane has focus idk.
   dont break the tests█
-  ? for shortcuts                                            ⌃x e enrich
+  ? for shortcuts                                 ⌃x e quick · ⌃x d deep
 ```
 
-### 5.2 Enriching
+### 5.2 Running
 
-The draft has left the box and shows dimmed in the card. The seconds count up.
-
-```
-  …transcript…
-
-╭ ✦ enriching · 4s ───────────────────────────────────── fast · sonnet ╮
-│ 1: Cancel                                                            │
-│                                                                      │
-│ the tree preview jumps back to the top every time i reopen a file.   │
-│ can we make it rember where i was, per file probably. also maybe q   │
-│ should close it from the prompt too not just when the pane has focus │
-│ idk. dont break the tests                                            │
-╰──────────────────────────────────────────────────────────────────────╯
-> █
-  ? for shortcuts
-```
-
-### 5.3 Ready
-
-Fast mode knows only the draft and the snapshot, so it adds structure and questions, not facts. "per file probably" stays a requirement; "maybe q should" changes the work, so it becomes a question.
+The draft stays where it is. Seconds count up, and the same chord cancels.
 
 ```
   …transcript…
 
-╭ ✦ enriched · rev 1 ───────────────── fast · sonnet · 228 → 557 chars ╮
-│ 1: Send  2: Edit  3: Original  4: Answer (3)  5: Full context        │
-│                                                                      │
-│ ## Goal                                                              │
-│ Make the `tree` plugin's file preview remember its scroll position   │
-│ per file, so reopening a file returns me to where I was instead of   │
-│ the top.                                                             │
-│                                                                      │
-│ ## Requirements                                                      │
-│ - Positions are kept per file.                                       │
-│                                                                      │
-│ ## Done when                                                         │
-│ - Reopening a file in the preview shows the lines it showed when I   │
-│   closed it.                                                         │
-│ - The existing `tree` tests still pass.                              │
-│                                                                      │
-│ ## Open questions                                                    │
-│ - Remember positions across sessions, or only this one?              │
-│ - If the file changed since it was last open, keep the same line or  │
-│   go back to the top?                                                │
-│ - Should `q` also close the preview while the prompt has focus?      │
-│                                                                      │
-│ added a goal and done-when; turned the hedges into questions         │
-╰──────────────────────────────────────────────────────────────────────╯
-> █
-  ? for shortcuts                     type feedback, then ⌃x e to refine
+> the tree preview jumps back to the top every time i reopen a file. can
+  we make it rember where i was, per file probably. also maybe q should
+  close it from the prompt too not just when the pane has focus idk.
+  dont break the tests█
+  ? for shortcuts                         ✦ deep pass · 6s · ⌃x d cancel
 ```
 
-### 5.4 Refining
+### 5.3 After a quick pass
 
-The person typed `drop the q part, separate task` and pressed `⌃x e`. The feedback leaves the box and heads the card while the previous revision shows dimmed.
-
-```
-╭ ✦ refining · 3s ────────────────────────────────────── fast · sonnet ╮
-│ 1: Cancel                                                            │
-│                                                                      │
-│ ↻ drop the q part, separate task                                     │
-│                                                                      │
-│ ## Goal                                                              │
-│ Make the `tree` plugin's file preview remember its scroll position   │
-│ per file, so reopening a file returns me to where I was instead of   │
-│ the top.                                                             │
-│                                                                      │
-│ ## Requirements                                                      │
-╰──────────────────────────────────────────────────────────────────────╯
-> █
-```
-
-Revision 2 changes only what the feedback named:
+Spelling is fixed and the ask is explicit. The hedges stay, and so does the shape.
 
 ```
-╭ ✦ enriched · rev 2 ───────────────── fast · sonnet · 228 → 493 chars ╮
-│ 1: Send  2: Edit  3: Original  4: Answer (2)  5: Full context        │
-│                                                                      │
-│ …                                                                    │
-│ ## Open questions                                                    │
-│ - Remember positions across sessions, or only this one?              │
-│ - If the file changed since it was last open, keep the same line or  │
-│   go back to the top?                                                │
-│                                                                      │
-│ removed the q question                                               │
-╰──────────────────────────────────────────────────────────────────────╯
+  …transcript…
+
+> The tree preview jumps back to the top every time I reopen a file.
+  Make it remember where I was, per file probably. Also, maybe `q`
+  should close it from the prompt too, not just when the pane has focus;
+  I'm not sure. Don't break the tests.█
+  ? for shortcuts      ✦ quick · 228 → 239 chars · ⌃x e undo · ⌃x d deep
 ```
 
-### 5.5 Answering
+### 5.4 After a deep pass
 
-`4` opens the questions with a field under each. Once the person has the keyboard in the card:
-
-```
-╭ ✦ answer · 2 open questions ───────── enter: next · last enter: fold ╮
-│ 1: Fold answers  2: Back                                             │
-│                                                                      │
-│ 1. Remember positions across sessions, or only this one?             │
-│    › this session only                                               │
-│ 2. If the file changed since it was last open, keep the same line or │
-│    go back to the top?                                               │
-│    › keep the line, clamp to the end of the file█                    │
-╰──────────────────────────────────────────────────────────────────────╯
->
-```
-
-Before they have it (`answerIn: band`), the header says how to take it:
+This is a session that had already read `tree/hooks/register.tsx`. The fork can name the real code, and it turns the hedges into questions.
 
 ```
-╭ ✦ answer · 2 open questions ───────────────────── ctrl+x tab to type ╮
-│ 1: Fold answers  2: Back                                             │
-│                                                                      │
-│ 1. Remember positions across sessions, or only this one?             │
-│    ›                                                                 │
-╰──────────────────────────────────────────────────────────────────────╯
+  …transcript…
+
+> ## Goal
+  Make the `tree` plugin's file preview remember its scroll position per
+  file, so reopening a file returns me to where I was instead of the
+  top.
+
+  ## Context
+  - The preview's position is `previewOffsetAtom`, which `openPreview`
+    in `tree/hooks/register.tsx` resets to 0 on every open.
+
+  ## Done when
+  - Reopening a file shows the lines it showed when I left it.
+  - The existing `tree` tests still pass.
+
+  ## Open questions
+  - Remember positions across sessions, or only this one?
+  - Should `q` also close the preview while the prompt has focus?█
+  ? for shortcuts      ✦ deep · 228 → 541 chars · ⌃x d undo · ⌃x e quick
 ```
 
-Enter on the last field folds the answers in, with no model call:
+From here the person can:
+- answer a question inline (`- Remember positions across sessions, or only this one? This session only.`);
+- delete the questions;
+- press Enter as it is and let Claude ask.
+
+### 5.5 No chord bound
 
 ```
-╭ ✦ enriched · rev 3 ───────────────── fast · sonnet · 228 → 554 chars ╮
-│ 1: Send  2: Edit  3: Original  5: Full context                       │
-│                                                                      │
-│ ## Goal                                                              │
-│ Make the `tree` plugin's file preview remember its scroll position   │
-│ per file, so reopening a file returns me to where I was instead of   │
-│ the top.                                                             │
-│                                                                      │
-│ ## Requirements                                                      │
-│ - Positions are kept per file.                                       │
-│                                                                      │
-│ ## Done when                                                         │
-│ - Reopening a file in the preview shows the lines it showed when I   │
-│   closed it.                                                         │
-│ - The existing `tree` tests still pass.                              │
-│                                                                      │
-│ ## Decisions                                                         │
-│ - Remember positions across sessions, or only this one? → this       │
-│   session only                                                       │
-│ - If the file changed since it was last open, keep the same line or  │
-│   go back to the top? → keep the line, clamp to the end of the file  │
-│                                                                      │
-│ folded 2 answers into Decisions (no model call)                      │
-╰──────────────────────────────────────────────────────────────────────╯
-```
+  …transcript…
 
-### 5.6 Full context
-
-`5` re-runs the draft through a fork of the session. In a session that had already read `tree/hooks/register.tsx`, the rewrite can name real code:
-
-```
-╭ ✦ enriched · rev 2 ──────────────────── context · opus · cache 41.2k ╮
-│ 1: Send  2: Edit  3: Original  4: Answer (2)                         │
-│                                                                      │
-│ ## Goal                                                              │
-│ Make the `tree` plugin's file preview remember its scroll position   │
-│ per file, so reopening a file returns me to where I was instead of   │
-│ the top.                                                             │
-│                                                                      │
-│ ## Context                                                           │
-│ - The preview draws in the band (`drawBand` in                       │
-│   `hooks/register.tsx`); its position is the `previewOffset` atom,   │
-│   which `openPreview` resets to 0.                                   │
-│ - `pane.test.tsx` already mounts the band preview, so a remembered   │
-│   offset can be asserted there.                                      │
-│ …                                                                    │
-╰──────────────────────────────────────────────────────────────────────╯
-```
-
-### 5.7 Mentions and pastes
-
-When the draft holds an `@mention` or a pasted image, Send cannot attach them (F15). The warning row explains; **2: Edit** is drawn as the primary button.
-
-```
-╭ ✦ enriched · rev 1 ───────────────── fast · sonnet · 188 → 604 chars ╮
-│ 1: Send  2: Edit  3: Original                                        │
-│                                                                      │
-│ ⚠ @hooks/register.tsx and [Image #1] are only attached when you send │
-│   from the prompt box: Edit, then Enter.                             │
-│                                                                      │
-│ ## Goal                                                              │
-│ …                                                                    │
-╰──────────────────────────────────────────────────────────────────────╯
-```
-
-### 5.8 Error
-
-```
-╭ ✦ enrich failed ───────────────────────── api-error 529 · overloaded ╮
-│ 1: Retry  3: Original  5: Full context                               │
-│                                                                      │
-│ Your draft is safe: 3 puts it back in the prompt box.                │
-╰──────────────────────────────────────────────────────────────────────╯
-```
-
-### 5.9 No chord bound
-
-```
 > make the tree legend wrap on narrow panes█
-  ? for shortcuts                    ⌃x e unbound · /enrich keys install
+  ? for shortcuts                  ⌃x e/d unbound · /enrich keys install
 ```
 
 ## 6. Non-functional requirements
 
 ### 6.1 Latency
 
-- Pressing `⌃x e` shows the enriching card within 100 ms; nothing waits on the model before the draft leaves the box.
-- Fast mode: median under 8 s for a 300-word draft on `sonnet` at `low` effort. Context mode depends on the transcript's length and the prompt cache.
+- After a chord, the hint line shows the running pass within 100 ms. The draft never leaves the box, so there is nothing else to wait for.
+- Quick: median under 5 s for a 300-word draft on `sonnet` at `low` effort.
+- Deep: under 30 s on a typical session. A fork's time grows with the transcript; on a long session, a trivial fork reply took about 8 s (M0, S11).
 
 ### 6.2 Cost
 
-- Fast mode sends the fixed instructions and house style first, marked for the prompt cache, so repeated calls within five minutes pay for them once.
-- The snapshot is capped at `contextChars` (about 3k tokens at the default).
-- Context mode reads the transcript from the main thread's cache; the header shows how much was served from it.
-- Tokens are shown on every card (F29).
+- Quick sends its fixed instructions and the house style first, marked for the prompt cache.
+- Deep reads the conversation from the main thread's prompt cache. On a long session that is about 300k cache-read tokens per press (measured 2026-10-11), billed at the cache-read rate. Deep runs only when the person presses its chord.
 
 ### 6.3 Never losing text
 
-The invariant: at every moment the original draft is in the prompt box, on the card behind `3: Original`, or in `$.store` behind `/enrich restore`. Tests cover each transition out of every state.
+The invariant: at every moment the original draft is in one of three places:
+- in the box;
+- one chord away, while the box holds an untouched result;
+- in `$.store`, behind `/enrich original`.
+
+The plugin writes to the box only when the box holds exactly the text the pass started from. Tests cover each path.
 
 ### 6.4 Quiet when idle
 
-- No timers run unless a call is in flight (the seconds ticker stops with it).
-- No `prompt.edit` hook: typing costs nothing.
-- The hint line re-draws only when the engine re-draws it (`isDraft` changes).
+- No timers run unless a pass is running. The seconds ticker stops with the pass.
+- One `prompt.edit` hook, which passes every edit straight through. It does work only while a result's hint is up, to retire that hint on the first edit.
+- The hint line redraws only when the engine redraws it, plus once a second while a pass runs.
 
 ### 6.5 Platforms
 
-- Terminal first; the fullscreen layout is not required (the band exists in both layouts).
-- Desktop: the engine raises the band and the hint line there too, so the card draws; where there is no prompt box, Edit and Original copy instead (F16).
-- Theme keys only (`claude`, `subtle`, `warning`, `error`), so light, dark and custom themes need no configuration.
+- Terminal first. The hint line exists in both the normal and the fullscreen layout.
+- Desktop: the engine raises the hint line there too. The labels are clickable, but chords are terminal-only.
+- Theme keys only (`claude`, `subtle`, `warning`), so light, dark and custom themes need no configuration.
+- Nothing is drawn above the prompt. `ctrl+x tab` and the band stay with other plugins, such as `tree`'s file preview.
 
 ## 7. Constraints and risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| **Plugins cannot register keybinding actions.** The only way a chord reaches a plugin from the prompt is a Button whose `action` names an engine action, pressed by the person's chord for it while the Button is mounted, no dialog is up and no engine handler of that action is mounted. | The chord depends on borrowing an engine action, and the person has to bind it once. A future build could mount that action's handler or rename it. | Default `diff:back`: its only handler lives inside the modal diff dialog, which blocks plugin buttons anyway. The Button lives only in the small hint tree, never in the card, so a refused name costs the hint and not the card. `triggerAction` is a picker. `/enrich keys install` does the binding. `/enrich <text>` always works. Re-run M0's probe S1 on every Claude Code update. |
-| Plugin-submitted prompts do not expand `@mentions` or attach pasted images. | Send loses those attachments. | Warning row and Edit as the primary button (F15). |
-| A digit typed into the empty box presses a card button. | Feedback that starts with a digit ("2 sections only") would press Edit, or Send. | The hint says "type feedback, then ⌃x e"; Send writes `last` first; `sendHotkey: false` takes the digit off Send. |
-| The enricher invents requirements or drops something. | A wrong prompt is sent with confidence. | Strict rules (A.7); a check that every mention, path and code token survived (F33); the notes row says what changed; Original is one key away. |
-| A long card scrolls its buttons out of the digit window. | Digits stop working. | Buttons are the first row; `↓ more` cue. |
-| The band is shared. The `tree` plugin draws its file preview there, and only one tree shows. | One plugin's drawing can hide the other's. | Enrich passes the band through while idle and draws its card alone while one is up. If M0 shows `tree`'s hook runs first, `tree` changes to call `next(e)` first and draw only into an empty band (A.9). |
-| Paste placeholders may not survive a take-out and put-back. | An image could detach from a draft restored with Original or Edit. | M0 probe S8; the warning row; `last` in the store. |
-| Hot reload drops module variables. | A call in flight is lost. | Everything a drawing needs is in session state; a reload mid-call leaves an error card with Retry (F45). |
+| **Plugins cannot register keybinding actions.** A chord reaches a plugin from the prompt only through a Button whose `action` names an engine action. The person's chord for that action presses it while the Button is mounted, no dialog is up, and no engine handler of that action is mounted. | Both chords depend on borrowing engine actions, and the person binds them once. A future build could mount those actions' handlers or rename them. | `diff:back` and `diff:nextSource` are handled only inside the modal diff dialog, which blocks plugin Buttons anyway. `quickAction` and `deepAction` are pickers, and `/enrich keys install` does the binding. Re-run M0's probes S1 and P1 on every Claude Code update. |
+| The result overwrites the draft. | A bad rewrite replaces good text. | It is applied only over the exact text it started from (F7). The same chord undoes it (F10). `/enrich original` restores it after edits (F14). |
+| The rewrite invents requirements or drops something. | A wrong prompt is sent with confidence. | Strict rules (A.6), the verbatim check (F12), and undo one chord away. |
+| A deep pass is slow and reads a lot of cache on long sessions. | Waiting, and cost. | It is opt-in per press. The seconds show in the hint line, and either chord cancels. Quick is the cheap default. |
+| A paste placeholder that goes back into the box may not still be bound to its image. | An image could detach after a pass. | M0 probe P4. If it detaches, drafts holding image placeholders are refused with a toast until the engine keeps them. |
+| A long deep result makes the prompt box tall. | The transcript gets less room while editing. | Deep's length cap (F19). `ctrl+g` opens the external editor. |
+| A hot reload drops module variables. | A pass in flight is lost. | The draft never left the box. A reload mid-pass just ends the pass. |
 
 ## 8. Success metrics
 
-- No lost text: across the integration suite and a week of use, every path out of every state leaves the original reachable.
-- A clear one-liner comes back without headings and at most 1.5× its length.
-- A 200-word brain dump comes back with Goal and Done when, and on 10 real drafts spot-checked, no requirement lacks a source in the draft, snapshot, house style or conversation.
-- `⌃x e` to the enriching card: under 100 ms. Fast mode median under 8 s.
-- After a week, the person reaches for `⌃x e` on brain dumps and Enter on clear asks (their own judgment).
+- No lost text: across the tests and a week of use, every path leaves the original reachable.
+- A clear one-liner comes back from a quick pass at most 1.3× its length, with no headings.
+- On 10 real brain dumps, a deep pass returns Goal and Done when, and no requirement lacks a source in the draft, house style or conversation.
+- Chord to running hint: under 100 ms. Quick median under 5 s.
+- After a week, the person's own judgment is that they reach for `⌃x d` on brain dumps, `⌃x e` on sloppy one-liners, and Enter on the rest.
 
 ## 9. Milestones
 
 | M | Deliverable | Done when |
 |---|---|---|
-| M0 Spike | A throwaway `--plugin-dir` mod running probes S1–S11 (§10.1). | Every row of §10.1 has a result; `triggerAction`, `hint` and `answerIn` defaults and the attachment policy are decided. |
-| M1 Skeleton and trigger | Manifest, state contract, trigger in the hint line, `/enrich` with `keys`, `keys install` and `restore`, keybinding detection, the state machine with an echo brain (returns the draft wrapped in a heading), Cancel and Original. | `⌃x e` on a draft empties the box and shows the card; `3` restores the draft; `claude plugin validate`, `tsc -p` and `claude plugin test` are green. |
-| M2 Fast brain | Instructions, snapshot, reply parser, verbatim check; `$.model.complete` with caching, the seconds ticker, timeout, error and Retry, Send, Edit, the copy fallback. | A one-liner comes back lightly touched; a 300-word dump comes back with sections and questions; Send and Edit work live. |
-| M3 Refine and context | Refine and regenerate revisions, the fork with its fallback, `5: Full context`, house style. | Feedback changes only what it names; context mode resolves "the bug above" into a real file. |
-| M4 Answer | Answer fields in the band or pane, focus handling, folding answers into Decisions. | Two answers and Enter give the next revision with Decisions and no model call. |
-| M5 Ship | README, root `marketplace.json` entry and root README row, the `tree` band change if M0 needs it, the full test matrix on `terminal` and `desktop`. | `/plugin install enrich --marketplace jyerxa/agent-skills` works on a clean machine; tests green. |
+| M0 Spike | A throwaway mod running the probes in §10.1. Round 3 is a working prototype of both chords. | Every row of §10.1 has a result, and the person has used both chords live and agreed v0.2. |
+| M1 Quick pass | <ul><li>Manifest and state contract</li><li>Both chord Buttons and the hint line</li><li>`/enrich`, `keys`, `keys install`, `original` and `last`</li><li>The quick brain</li><li>Apply only over the start text; undo; cancel; errors</li><li>The verbatim check</li></ul> | `⌃x e` on a draft replaces it with a tidied version, and `⌃x e` again restores it. `claude plugin validate`, `tsc -p` and `claude plugin test` are green. |
+| M2 Deep pass | <ul><li>The fork, with its `opus` fallback</li><li>The timeout</li><li>House style</li></ul> | In a session that discussed a bug, `⌃x d` on "fix the bug above" names the real file. In a fresh session it falls back and says so. |
+| M3 Ship | <ul><li>README</li><li>A root `marketplace.json` entry and a root README row</li><li>Tests on `terminal` and `desktop`</li></ul> | `/plugin install enrich --marketplace jyerxa/agent-skills` works on a clean machine, and the tests are green. |
 
 ## 10. Decision log
 
 | Date | Decision |
 |---|---|
-| 2026-10-11 | Review UI: a card in the band above the prompt, rendered Markdown, like a plan approval. Chosen over replacing the draft in place and over a docked pane. |
-| 2026-10-11 | Brain: configurable. `fast` (one-shot model plus repository snapshot) is the default; `context` (a fork of the session) is the option. Not chosen: a grounded subagent (Later). The card's `5: Full context` escalates a single draft; added in the PRD as the per-prompt form of the setting. |
-| 2026-10-11 | Style: right-sized, and it asks. Structure scales with the draft; gaps become open questions rather than assumptions. |
-| 2026-10-11 | Chord: `ctrl+x e`. Enter is unchanged. |
-| 2026-10-11 | Pitched one at a time: refine loop (in), answer open questions in place (in), composer lint (out), house style files (in). |
-| 2026-10-11 | Plugins cannot register keybinding actions, so the chord borrows an engine action through a Button's `action` prop. Default `diff:back`; the person binds it once (`/enrich keys install`). The trigger lives in the hint line under the prompt. M0 confirms both. |
-| 2026-10-11 | Editing happens in the prompt box (2: Edit), because plugin text fields are single-line. |
-| 2026-10-11 | No close button on the card: `3: Original` is the way out, so closing never leaves the draft out of the box. |
-| 2026-10-11 | The band cannot take the keyboard by itself, so answering needs `ctrl+x tab` (`band`) or a pane opened with `focus` (`pane`). M0 picks the default. |
-| 2026-10-11 | An unbound chord shows in the hint line's tail (`⌃x e unbound · /enrich keys install`), not as a card. |
-| 2026-10-11 | Name: `enrich`. |
-| 2026-10-11 | PRD v0.1 approved by the user, including the additions not asked for: `5: Full context`, no close button, token counts, `/enrich restore`, `/enrich keys install`. |
+| 2026-10-11 | v0.1: a review card above the prompt, a `fast`/`context` setting plus `5: Full context`, a refine loop, answering open questions in the card, and house style. Chord `ctrl+x e` on the borrowed `diff:back`. Name `enrich`. Approved, then superseded by v0.2. |
+| 2026-10-11 | Plugins cannot register keybinding actions, so chords borrow engine actions through a Button's `action` prop in the hint line. Still true in v0.2. |
+| 2026-10-12 | The person tried the card in the spike: "This interaction model is too complex for this to be useful." v0.2 drops the card, the refine loop, the answer UI, digit hotkeys and any use of `ctrl+x tab`. |
+| 2026-10-12 | Two chords: `ctrl+x e` for a quick pass and `ctrl+x d` for a deep pass. They replace v0.1's `mode` setting and `5: Full context`. |
+| 2026-10-12 | The result replaces the draft in the prompt box. v0.1 had rejected this in favour of the card; reversed. |
+| 2026-10-12 | Undo is the same chord on the untouched result. The other chord runs its pass from the original. |
+| 2026-10-12 | Quick is v0.1's fast brain, without the repository snapshot. Deep is v0.1's context brain (a fork of the session), with an `opus` one-shot when there is nothing to fork. |
+| 2026-10-12 | Open questions stay as plain text at the end of a deep result. |
+| 2026-10-12 | Nothing is drawn above the prompt, so `ctrl+x tab` always reaches the `tree` pane, as the person asked. |
+| 2026-10-12 | The second borrowed action is `diff:nextSource`. Like `diff:back`, its only handler is inside the modal diff dialog. |
+| 2026-10-12 | Additions not asked for: the verbatim check and its hint (F12); `/enrich original` and `/enrich last` (F14); refusing a pass when the draft changed mid-run (F7); clickable labels for desktop. |
+| 2026-10-12 | PRD v0.2 approved by the person after using both chords in the round 3 prototype, including the additions above. |
 
-### 10.1 M0 probes (to fill in)
+### 10.1 M0 probes
+
+Rounds 1 and 2 tested v0.1's design; v0.2 makes some of them moot.
+
+| # | Probe | Result |
+|---|---|---|
+| S1 | A `diff:back` Button in the hint line, with `"ctrl+x e": "diff:back"` in the Chat context | **Works.** It fires from the prompt, and the binding applied without a restart (2026-10-11, and again 2026-10-12). |
+| S2 | `app:cycleDiffBase` and `pane:next` as borrowed actions | Both fire from a hint-line Button with the `tree` pane open. Not tested with the diff panel open. Unused in v0.2. |
+| S3 | A Button inside `display: 'none'` | **Fires** (`ctrl+x 1`, twice). v0.2 uses it for the other pass's cancel while one pass runs. |
+| S4 | The hint line drawn as our own row around `next(e)` | `next(e)` is the engine's line (`{type: engine}`), and it redraws normally. Whether the left side looks right: open, see round 3. |
+| S5 | What `next(e)` holds in the band | The engine's own. Moot: v0.2 draws no band. |
+| S6 | `alt+e` reaching `prompt.edit` | No modified key was seen. Moot. |
+| S7 | `fill({ text: '' })` and filling the text back | **Both work.** `{isFilled: true}`, and the cursor lands at the end. |
+| S8 | A pasted image through take-out and put-back | Not run. Becomes P4. |
+| S9 | A bare digit from the empty box pressing a band Button | **Works.** Moot. |
+| — | `ctrl+x tab` with a band card up | It focuses the card, not `tree`. This finding drove v0.2's rule of drawing nothing above the prompt. |
+| S10 | `/enrich <text>` | Not run. Moot. |
+| S11 | A model call started from `$.clock.after(0)`; a fork while a turn runs | **Both work.** `complete` on `haiku` took about 1 s. A fork mid-turn on a long session took about 8 s and about 305k cache-read tokens. |
+
+Round 3 is the two-chord prototype:
 
 | # | Probe | Decides | Result |
 |---|---|---|---|
-| S1 | A `diff:back` Button in the hint line and in the band, with `"ctrl+x e": "diff:back"` in the Chat context. Does it fire? Any keybinding warning in the debug log? Does a new binding apply without a restart? | Trigger action | |
-| S2 | `app:cycleDiffBase` with the diff panel open; `pane:next` with the `tree` pane open. | Which actions are safe to borrow | |
-| S3 | An action Button inside `display: 'none'`, inside a zero-height box, in a collapsed band, and scrolled out of view. | `hint: off`; collapse behaviour | |
-| S4 | The hint line drawn as our own tree around `next(e)`: do the engine's pills stay live? How quickly does `isDraft` re-draw? | Hint line as the host | |
-| S5 | What `next(e)` holds in the band when idle, with `tree`'s preview up, and with a plan approval up. | Band etiquette (A.9) | |
-| S6 | Does `alt+e` reach `prompt.edit` as a key? Does a pass-through hook there slow typing? | Whether a second trigger exists | |
-| S7 | `fill({ text: '' })` empties the box; fill while the band holds the keys; fill under a permission dialog returns `dialog`. | Take-out (F4) | |
-| S8 | `prompt.read` with `[Image #1]` and a long paste: after Original, and after Edit then Enter, is the attachment still attached? | Attachment policy (F15) | |
-| S9 | After a digit press, does the band hold the keys? `$.ui.focus` from a press handler; `autoFocus` after `ctrl+x tab`; a pane opened with `focus` over the empty box. | `answerIn` default | |
-| S10 | `/enrich <text>` with mentions and pastes; does answering `{}` print nothing in the transcript? | Command fallback | |
-| S11 | `$.model.complete` awaited inside a press handler versus started from `$.clock.after(0)`, with Esc pressed meanwhile; a fork while a turn runs. | Job pattern (A.5) | |
+| P1 | `ctrl+x d` bound to `diff:nextSource` fires its hint Button, with `tree` open | The deep chord | **Works.** It fired the deep Button, and the new binding applied without a restart. |
+| P2 | Both passes end to end: time, usage, a multi-line result filled into the box, cursor at the end, Enter sending it | The brains; F9 | **Both work.** Each result filled the box with the cursor at the end. Quick on `sonnet`: 1.2 s, 395 tokens in and 15 out. Its instructions are too short to cache yet (0 cache read). Deep by fork on this long session: 5.0 s, 511 in and 421 out, 166k cache read. Enter after a fill not yet checked. |
+| P3 | Does the box's own undo (`ctrl+_`) revert a plugin's fill? What does `prompt.edit` see? | Whether F10 needs mentioning beside `ctrl+_` | |
+| P4 | `[Image #1]` kept by a pass: after the fill, does Enter still attach the image? | Attachment policy (§7) | |
+| P5 | Typing while a pass runs: the result isn't applied, and a toast says so | F7 | |
+| P6 | A deep pass while idle, while a turn runs, and in a fresh session (`nothing-to-fork`, then `opus`) | Deep fallback | |
+| S4 | Does the hint line's left side (the engine's pills) look normal next to the chords? | The hint host | |
 
 ## Appendix A. Technical design
 
@@ -470,251 +335,197 @@ The invariant: at every moment the original draft is in the prompt box, on the c
 
 ```
 claude/plugins/in-progress/enrich/
-  .claude-plugin/plugin.json   name, version, description, author, types, userConfig (§4.9)
+  .claude-plugin/plugin.json   name, version, description, author, types, userConfig (§4.7)
   .gitignore                   .claude-plugin/types/, tsconfig.json (written by the engine)
-  README.md                    install, binding the chord, using it, configuration, development
+  README.md                    install, binding the chords, using them, configuration
   docs/PRD.md                  this file
   hooks/hooks.json             { "modules": ["./register.tsx"] }
   hooks/register.tsx           every hook, every atom, every function that takes $, all JSX
-  hooks/meta.ts                enrichment instructions and the per-call prompt (A.7)
-  hooks/parse.ts               parseReply, findOpenQuestions (A.6)
-  hooks/answers.ts             foldAnswers (F22)
-  hooks/snapshot.ts            formatSnapshot: the repository block, within a budget (A.8)
-  hooks/preserve.ts            tokens that must survive (mentions, paths, code, URLs, placeholders); which went missing
-  hooks/draft.ts               classifyDraft: empty, command, bash, memory, ok; placeholder and mention detection
-  hooks/keys.ts                find the chord bound to an action; label it (⌃x e); merge a binding
-  hooks/view.ts                the card as plain data: header, buttons, body, warnings, notes
-  hooks/paths.ts               copied from tree: toPosix, normalizeRoot, cells
+  hooks/meta.ts                the quick and deep instructions and the per-call prompt (A.6)
+  hooks/parse.ts               parseReply (A.5)
+  hooks/preserve.ts            tokens that must survive; which went missing (F12)
+  hooks/draft.ts               classifyDraft: empty, command, bash, memory, ok
+  hooks/keys.ts                find the chord bound to an action; label it (⌃x e); merge bindings
   hooks/*.test.ts              one per pure module
-  hooks/flow.test.tsx          integration: hint line and card on terminal and desktop
+  hooks/flow.test.tsx          integration: the hint line and the box, on terminal and desktop
   types/index.d.ts             the PluginState contract (A.2)
 ```
 
-The engine's static scanner refuses `$` passed to any function not declared at the top level of the hooks module, and atoms must be declared in the file that reads them. So the pure modules never take `$`: `view.ts` returns plain data and `register.tsx` turns its button list into Buttons with handlers. The plugin installs from its own folder, so helpers are copied from `tree`, not imported.
+The engine's static scanner refuses `$` passed to any function not declared at the top level of the hooks module. Atoms must be declared in the file that reads them. So the pure modules never take `$`.
 
 ### A.2 State
 
 ```ts
-export type EnrichPhase = 'idle' | 'enriching' | 'ready' | 'refining' | 'answering' | 'error'
-export type EnrichBrain = 'fast' | 'context'
-export type EnrichDraft = { text: string; cursor: number }
-export type EnrichRev = {
-  rev: number; text: string; notes: string; questions: string[]
-  brain: EnrichBrain; model: string; fellBack: boolean
-  feedback: string | null; via: 'model' | 'answers'
-  usage: { input: number; output: number; cacheRead: number }
-  warnings: string[]; truncated: boolean
-}
+export type EnrichPass = 'quick' | 'deep'
 export type EnrichJob = {
-  id: number; kind: 'enrich' | 'refine' | 'regenerate'; brain: EnrichBrain
-  startedAt: number; feedback: string | null
+  id: number; pass: EnrichPass
+  source: string      // the text being improved
+  box: string         // what the box held at the start; it must still hold it to apply
+  startedAt: number
 }
-export type EnrichBinding = { action: string; chord: string | null }
+export type EnrichResult = {
+  pass: EnrichPass; original: string; text: string
+  model: string; warnings: string[]
+}
 
 declare module 'claude-code' {
   interface PluginState {
     enrich: {
-      phase: EnrichPhase
-      draft: EnrichDraft | null   // the original, until the card closes
-      revs: EnrichRev[]           // newest last, at most 8
-      job: EnrichJob | null       // the call in flight
-      elapsed: number             // seconds, for the header
-      answers: string[]           // answer fields, by question
-      error: string | null
-      binding: EnrichBinding
+      job: EnrichJob | null         // the pass in flight
+      elapsed: number               // seconds, for the hint line
+      result: EnrichResult | null   // the applied result, until the person's first edit
+      binding: { quick: string | null; deep: string | null }   // chord labels, null when unbound
     }
   }
 }
 ```
 
-Module variables (lost on reload, which is fine): the parsed config, the `AbortController` of a fast call, the ticker and timeout handles. `$.store` holds `last` (F43).
+Module variables, lost on reload (which is fine): the parsed config, the `AbortController` of a `complete` call, and the ticker. `$.store` holds `last` (F14).
 
 ### A.3 Hooks
 
 | Hook | Does |
 |---|---|
-| `session.start` | Registers `/enrich`; reads the keybindings file into `binding`; if `job` is set, the call was cut by a reload: phase `error`, `interrupted by reload`. |
-| `command.run` `{ command: 'enrich' }` | Help, `<text>`, `keys`, `keys install`, `restore`. |
-| `ui.render` `PromptHint` | Wraps the engine's line (`next(e)`) with the trigger Button (`action: triggerAction`) and its label, per F2, F42 and `hint`. |
-| `ui.render` `AbovePrompt` | Idle or `hasSurvey`: `next(e)`. Otherwise the card. |
-| `prompt.submit` | Observes only, `.catch` passes through. If a card is up, one toast (F46). |
-| `session.end` `reason: 'clear'` | Cancels the call (F45). |
-| `ui.render` `Pane`, `ui.close` | Only with `answerIn: pane`. |
+| `session.start` | Registers `/enrich`, reads the keybindings file into `binding`, and clears a `job` a reload cut short. |
+| `command.run` `{ command: 'enrich' }` | Help, `keys`, `keys install`, `original`, `last`. |
+| `ui.render` `PromptHint` | With no draft and no pass running: `next(e)`. Otherwise a row holding `next(e)` and, at the right, the two chord Buttons with labels by state (§5). The other pass's Button stays mounted, hidden, so either chord cancels. |
+| `prompt.edit` | Passes through. If `result` is set and the edit changes text, it clears `result`. |
+| `session.end` `reason: 'clear'` | Cancels a running pass. |
 
-### A.4 State machine
+One top-level `chord($, pass)` decides what a press does:
+- a pass is running: cancel it;
+- the box holds the untouched result: the same pass undoes, the other pass runs from the original;
+- the draft is refused (F4): toast;
+- otherwise: start the pass.
 
-| Phase | Band draws | Hint line | Leaves by |
-|---|---|---|---|
-| idle | nothing (`next(e)`) | `⌃x e enrich` while a draft is typed | trigger on a draft: take out (F4), go to enriching, start the ticker, schedule the call |
-| enriching | §5.2 | nothing | success: rev 1, ready. `nothing-to-fork`: same job re-run fast, `fellBack`. Failure or timeout: error. `1`: Cancel: new job id, abort, put the draft back, idle |
-| ready | §5.3 | `type feedback, then ⌃x e to refine` | `1` Send, `2` Edit, `3` Original: idle. `4`: answering. `5`: enriching (context). Trigger with text in the box: refining with that feedback. Trigger on the empty box: refining (regenerate) |
-| refining | §5.4 | nothing | success: rev N+1, ready. Failure or Cancel: ready, feedback back in the box |
-| answering | §5.5 | nothing | Enter on the last field or `1`: fold, rev N+1, ready. `2`: ready |
-| error | §5.8 | nothing | `1` Retry: the same job again. `3` Original: idle. `5`: the other brain |
+### A.4 Passes: scheduling, cancel, timeout
 
-One top-level `trigger($)` decides by phase and box contents; the hint Button, `/enrich <text>` and the probes all call it.
+- A press only writes state and schedules the call with `$.clock.after(0, …)`, so the model call never runs inside the press's dispatch.
+- Every pass carries an id. A result whose id is no longer `job.id` is dropped; this is how cancel works for `fork`, which takes no abort signal.
+- `complete` calls get an `AbortController` and `timeoutMs`. A fork gets a `$.clock.after(timeoutMs)` timer that fails the pass.
+- A `$.clock.every(1000)` ticker writes `elapsed` while a pass runs.
+- Applying a result:
+  1. read the box;
+  2. compare it with `job.box`;
+  3. fill;
+  4. set `result` from the fill's returned text, so a later comparison sees exactly what the box holds.
 
-### A.5 Jobs: scheduling, cancel, timeout
+### A.5 Reply contract and parser
 
-- A press only writes state and schedules the call with `$.clock.after(0, …)`, so the model call never runs inside the press's dispatch, which the engine may abandon.
-- Every job carries an id (its start time). A result whose id is no longer `job.id` is dropped: this is how Cancel works for `fork`, which takes no abort signal.
-- Fast calls also get an `AbortController` (`options.signal`) and `timeoutMs`. Fork calls get a `$.clock.after(timeoutMs)` timer that fails the job.
-- A `$.clock.every(1000)` ticker writes `elapsed` while a job runs and is cancelled when it ends.
+The model replies `<prompt>…the improved prompt…</prompt>` and nothing else. `parseReply` works in this order:
 
-### A.6 Reply contract and parser
+1. It normalises line endings.
+2. It takes the text from the first `<prompt>` to the last `</prompt>`. If the closing tag is missing, it takes the rest.
+3. With no tag at all, it unwraps a single code fence around the whole reply.
+4. It trims the result. An empty result is an error (F13).
 
-The model replies:
+### A.6 Instructions (draft, as running in the round 3 spike)
 
-```
-<enriched>
-…the rewritten prompt in Markdown; when there are gaps, its last section is "## Open questions"…
-</enriched>
-<notes>one line: what changed</notes>
-```
-
-Open questions stay inside the enriched text, so Send and Edit carry them to Claude. `parseReply`:
-
-1. Normalise line endings.
-2. Take the text from the first `<enriched>` to the last `</enriched>`. If the closing tag is missing, take the rest and mark the revision `truncated`.
-3. If there is no tag at all: drop a leading "Here's…" or "Sure…" paragraph, unwrap a single code fence around the whole reply, and record a warning.
-4. Notes from `<notes>`, cut to 140 characters.
-5. If the result is empty, it's an error.
-
-`findOpenQuestions` finds a heading or bold line matching `open questions`, then takes `-`, `*` and `1.` items up to the next heading, with their offsets. `foldAnswers` moves answered items to `## Decisions` (created before Open questions, or appended to), keeps blank ones, and removes an empty Open questions section.
-
-### A.7 Enrichment instructions (draft)
-
-The fixed part, sent as the cached system prompt in fast mode and at the head of the fork prompt in context mode:
+Shared tail, used by both passes:
 
 ```
-You rewrite a developer's draft prompt for Claude Code, an agentic coding
-assistant that will act on it in their repository. You never answer the draft
-or do the work it asks for. You return the draft rewritten so Claude Code can
-act on it well.
-
-Size the rewrite to the draft:
-- A clear one-liner: fix only what would mislead. No headings. Returning it
-  almost unchanged is a good answer.
-- A paragraph or a few asks: one tight paragraph, then a short list of
-  requirements if there are several.
-- A brain dump (several threads, or about 120 words or more): use only the
-  sections that have real content, in this order: Goal, Context, Requirements,
-  Done when, Out of scope, Open questions.
-- A question stays a question. Make it precise; don't turn it into a task.
-
-Never invent. Every requirement, constraint, file, name, number and technology
-must come from the draft, the <repo> block, the house style, or the
-conversation. When something the work depends on is missing or ambiguous, ask
-instead of guessing: put it under "## Open questions" as the last section, at
-most 5 questions, each answerable in a few words. A hedge in the draft
-("maybe", "probably", "idk") that changes what gets built becomes a question;
-one that doesn't stays as the author wrote it.
+Never invent. Every requirement, constraint, file, name, number and
+technology must come from the draft or the conversation.
 
 Keep verbatim: @mentions, file paths, identifiers, inline code and code
 blocks, URLs, error messages, quoted text, and placeholders such as
-[Image #1] or [Pasted text #1].
+[Image #1] or [Pasted text #1 +12 lines].
 
-Keep the author's voice: first person, their terms. Fix spelling. No
-pleasantries and no commentary about the rewrite.
+Keep the author's voice: first person, their terms. No pleasantries and no
+commentary about the rewrite.
 
-Length: at most the larger of 600 characters and 3 times the draft; for drafts
-over 1,000 characters, at most 1.5 times the draft plus 1,500. Shorter is
-better when nothing is lost.
-
-Reply in exactly this form and nothing else:
-<enriched>
-the rewritten prompt, in Markdown
-</enriched>
-<notes>one line: what you changed</notes>
+Reply with exactly this and nothing else:
+<prompt>
+the improved prompt
+</prompt>
 ```
 
-Appended when they apply:
-
-- **House style** (F36): `## House style (yours)` and `## House style (this project)`, then "Where they conflict, follow this project's."
-- **Refine** (F17): "You are revising your previous rewrite. `<previous>` holds it; `<feedback>` holds what the author wants changed. Make the smallest change that satisfies the feedback. Keep everything else exactly as it was, and don't bring back anything an earlier revision removed."
-- **Regenerate** (F18): "Polish `<previous>`. Weave each item under `## Decisions` into the section it belongs to, drop the questions it answers, and remove the Decisions section."
-- **Context mode** (F25): "The conversation above is the session this prompt will be sent into. Use it to resolve references ('the bug above', 'that file') into concrete names, and add a Context section only with facts from it. Don't continue the conversation and don't call tools."
-
-The per-call message wraps the snapshot in `<repo>…</repo>` and the draft in `<draft>…</draft>` (plus `<previous>` and `<feedback>` on a refine), escaping any closing tag inside the person's text.
-
-### A.8 Repository snapshot
+Quick (the cached `system` of a `complete` call):
 
 ```
-<repo>
-cwd: .   (root: agent-skills)
-branch: feat/enrich-prd
-status:
-?? claude/plugins/in-progress/enrich/
-top level: .claude-plugin/ .github/ claude/ skills/ LICENSE README.md
-instructions: (none in this repository; the person's own ~/.claude/CLAUDE.md if present)
-</repo>
+You tidy a developer's draft prompt for Claude Code, an agentic coding
+assistant that will act on it in their repository. You never answer the
+draft or do the work it asks for; you return the draft, improved.
+
+Make a light pass:
+- Fix spelling and grammar, and anything that would mislead.
+- Make the ask explicit: what to do, and to what.
+- Several separate asks become a short list; otherwise keep prose. No
+  headings.
+- Keep hedges ("maybe", "not sure") as the author wrote them.
+- Keep about the same length. A draft that is already clear comes back
+  nearly unchanged.
 ```
 
-Sources:
-- cwd and root: `$.session` and the copied path helpers.
-- Branch and status: `git rev-parse --abbrev-ref HEAD` and `git status --short --branch` through `$.process.run`, hooks off, at most 40 lines.
-- Top level: `$.fs.list` of the root, at most 60 entries.
-- Instructions: `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` up the tree (`$.fs.ancestors`), plus the person's own.
+Deep (the head of the fork's prompt; the `system` of the fallback):
 
-Each part is cut to fit `contextChars`, instructions last, with a note saying what was cut.
+```
+Stop: don't continue the conversation and don't call tools. The developer
+has drafted their next prompt for this session and wants it rewritten
+before they send it. Return the draft rewritten so Claude Code can act on
+it well; never answer it or do the work.
 
-### A.9 Sharing the band with `tree`
+Restructure it:
+- Use only the sections that have real content, in this order: Goal,
+  Context, Requirements, Done when, Out of scope, Open questions. A short
+  draft can stay one tight paragraph plus "Done when".
+- Use the conversation, when there is one, to resolve references ("the
+  bug above", "that file") into concrete names. Add a Context section only
+  with facts from it that the work needs.
+- When something the work depends on is missing or ambiguous, ask instead
+  of guessing: put it under "## Open questions" as the last section, at
+  most 5, each answerable in a few words. A hedge that changes what gets
+  built becomes a question; one that doesn't stays as written.
+- Length: at most the larger of 600 characters and 3 times the draft.
+```
 
-The band shows one tree. Enrich's rule: pass through (`next(e)`) while idle; draw the card alone while one is up, and yield to surveys. If M0 (S5) shows `tree`'s hook runs above enrich's, `tree` changes its AbovePrompt hook (`claude/plugins/in-progress/tree/hooks/register.tsx`, around line 1868) to call `next(e)` first and draw its preview only when nothing came back. The shared rule for both plugins: draw only into an empty band, and an enrich card wins.
+Appended when present: `## House style (yours)` and `## House style (this project)`, then "Where they conflict, follow this project's." The draft goes last, as `<draft>…</draft>`, with any `</draft>` inside it escaped.
 
-### A.10 Tooling and tests
+### A.7 Tooling and tests
 
 - `claude plugin validate`, `tsc -p` and `claude plugin test` on the plugin folder, as for `tree`.
 - Unit tests, one file per pure module:
-  - **parse:** tags; a missing closing tag; a whole-reply fence; a preamble; no tags; open questions as a heading, bold or numbered; none.
-  - **answers:** all answered; some answered; an existing Decisions section; blank answers.
-  - **meta:** size tiers; project house style over the person's; the refine message carries previous and feedback; closing tags escaped.
-  - **snapshot:** caps and cut notes.
-  - **preserve:** mentions, paths, fences and placeholders found, missing ones flagged.
-  - **draft:** classification and placeholders.
-  - **keys:** chord lookup, label, merge (a taken chord is refused; a new file gets `$schema` and `$docs`).
-  - **view:** header text, buttons per phase, Edit primary when mentions are present.
+  - **parse:** a tagged reply; a missing closing tag; a fenced reply; an empty reply.
+  - **meta:** quick and deep prompts; the project's house style over the person's; `</draft>` escaped.
+  - **preserve:** mentions, paths, code spans, URLs and placeholders found; missing ones named.
+  - **draft:** classification.
+  - **keys:** chord lookup and labels; merging (a taken chord refused; a new file gets `$schema` and `$docs`).
 - `flow.test.tsx`, mirroring `tree`'s `world()` stub helper (`tree/hooks/pane.test.tsx`):
   - **Stubs:**
-    - a prompt box object behind `prompt.read`, `prompt.fill` and `prompt.submit`;
+    - a prompt box behind `prompt.read` and `prompt.fill`;
     - scripted `model.complete` and `model.fork`, the fork able to answer `nothing-to-fork`;
     - `fs.read` for the keybindings file and `enrich.md`;
-    - `fs.list`, `fs.ancestors` and git through `process.run`;
     - the mocked clock.
-  - **Mounts:** the hint line and the band on `terminal` and on `desktop`.
   - **Cases:**
-    - trigger, take-out and the enriching card, with seconds after `advance(3000)`;
-    - Send, Edit and Original;
-    - Cancel mid-call ignoring the late result;
-    - an aborted call leading to error and Retry;
-    - refine carrying previous and feedback;
-    - context mode and its fallback;
-    - answering folding with no model call;
-    - `hasSurvey` hiding the card and keeping state;
-    - idle pass-through of another plugin's band tree;
-    - reload mid-call and `/clear`;
-    - a `/` draft refused;
-    - the `no_composer` copy fallback;
+    - each chord starts its pass, and the hint shows the seconds;
+    - the result fills the box and the hint shows undo;
+    - the same chord undoes; the other chord runs from the original;
+    - an edit retires the hint, after which a chord runs on the edited text;
+    - cancel ignores the late result;
+    - a draft changed mid-pass leaves the box alone and toasts;
+    - an error leaves the box alone;
+    - deep falls back on `nothing-to-fork`;
+    - a dropped mention is named;
+    - `/`, `!` and `#` drafts are refused;
     - an unbound chord;
-    - a dropped mention warned.
+    - `/enrich original` and `/enrich last`;
+    - `/clear` mid-pass;
+    - the desktop surface.
 
-### A.11 Engine references (Claude Code 2.1.296)
+### A.8 Engine references (Claude Code 2.1.296)
 
 Line numbers in the engine's `claude-code.d.ts` for this build:
 
 | What | Line |
 |---|---|
 | Button `action`, the borrowed-chord rule | 1096 |
-| Button `hotkey`, bare digits from an empty composer | 1087 |
-| `$.prompt.submit`, `read`, `fill` | 2944 |
-| `$.ui.focus`, denied unless the site holds the keys | 2549 |
-| `prompt.submit` event | 4100 |
-| `$.model.complete` request | 6178 |
-| `$.model.fork` request and `nothing-to-fork` | 6349 |
-| Pane `focus`, granted over an empty composer | 7415 |
-| `PromptBox` | 8307 |
-| Plugin prompts don't expand mentions or pastes (`asUser`) | 9021 |
+| `$.ui.toast` | 2453 |
+| `$.model.complete`, `$.model.fork` | 2624 |
+| `$.prompt.read`, `fill` | 2944 |
+| `ModelCompleteRequest`, `ModelCompleteResult` | 6178 |
+| `ModelForkRequest`, `nothing-to-fork` | 6349 |
+| `PromptEditInput` | 8540 |
+| `PromptFillArgs` | 8621 |
 | `PromptHint` site, `isDraft` | 10225 |
-| `AbovePrompt` site, `hasSurvey`, digits within the visible window | 10263 |
 
-Keybinding actions with no default key that a Button could borrow: `diff:back` (DiffDialog, chosen), `app:cycleDiffBase` (DiffPanel; has `ctrl+x b`), `pane:next` and `pane:previous` (Pane), `footer:dismiss` (Footer), `app:toggleDiffPreSession`, `app:toggleDiffNoiseFilter` (Global).
+Keybinding actions whose only handler lives inside the modal diff dialog, and which a Button can therefore borrow from the prompt: `diff:back` (no default key; used for quick) and `diff:nextSource` (default `right`, in DiffDialog only; used for deep). Others are `diff:previousSource`, `diff:previousFile` and `diff:nextFile`.
