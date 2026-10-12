@@ -1,6 +1,6 @@
 # PRD: Enrich, a prompt-improvement pass for Claude Code
 
-**Version** 0.2, approved 2026-10-12. It replaces v0.1's review-card design; §10 says why.
+**Version** 0.3, 2026-10-12. v0.2 (approved the same day) replaced v0.1's review-card design. v0.3 makes the deep pass an interview, as the person chose: it plans its questions, asks them back to back, then writes in six fixed sections. §10 has the history.
 **Author** jeremiah, drafted with Claude
 **Target stack** Claude Code 2.1.296 function-hooks plugin ("mod"): a TypeScript/JSX hooks module. Model calls go through the engine's own client (`$.model.complete`, `$.model.fork`).
 
@@ -11,7 +11,7 @@ Claude does better with a prompt that states the goal, what it should know, what
 Enrich adds two chords to the prompt box. Enter still sends the draft as typed.
 
 - **`ctrl+x e`, quick pass.** Tidies the draft: fixes spelling, makes the ask explicit, and turns several asks into a list. The size and shape stay the same, and it takes a few seconds.
-- **`ctrl+x d`, deep pass.** Rewrites the draft with the whole conversation in view, as a structured prompt (Goal, Context, Done when, and so on). It lists what it couldn't know as open questions.
+- **`ctrl+x d`, deep pass.** Interviews the person, then writes. It reads the whole conversation, works out what it can't settle on its own, and asks those questions back to back in Claude Code's own question dialog. For each one the person picks a suggested answer, types their own, or leaves it to Claude. It then writes a structured prompt with the answers built in, under Goal, Context, Tasks, Scope, Guardrails and Success Criteria.
 
 Either way, the improved prompt replaces the draft in the prompt box. The person reads it there, edits it like any prompt, and presses Enter. Pressing the same chord again puts the original back. There is no card, panel or button to learn, and nothing is drawn above the prompt.
 
@@ -32,7 +32,7 @@ Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in
 
 - No review card or panel. v0.1 had one; it was dropped on 2026-10-12 as too much to learn.
 - No refine loop. To change the result, edit the text or run a pass again.
-- No answer UI. Open questions are plain text at the end of the prompt. Answer them inline, delete them, or send them and let Claude ask.
+- No answer UI of its own. The deep pass asks in Claude Code's own question dialog (`$.ui.ask`), the one Claude uses to ask the person things. Its result carries the answers as decisions, so there are no open questions left to hand-edit.
 - No automatic enrichment, no composer lint, no prompt library.
 
 ## 3. Personas
@@ -54,7 +54,7 @@ Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in
 
 ### 4.2 While a pass runs
 
-- F5. The draft stays in the box, untouched. The hint line shows the pass and the elapsed seconds: `✦ deep pass · 6s · ⌃x d cancel`.
+- F5. The draft stays in the box, untouched. The hint line shows the pass and the seconds the current model call has run: `✦ quick pass · 3s · ⌃x e cancel`, `✦ deep · reading · 6s · ⌃x d cancel` while the deep pass plans, `✦ deep · writing · 4s · ⌃x d cancel` after the answers.
 - F6. Either chord cancels the running pass. The draft is left as it is, and a result that arrives late is dropped.
 - F7. The person may keep typing, or send the draft with Enter, while a pass runs. The result is applied only if the box still holds exactly the text the pass started from. Otherwise the box is left alone and a toast says `draft changed, result not applied (/enrich last)`.
 - F8. A pass may run while a Claude turn is running; both brains work mid-turn (M0, S11).
@@ -74,23 +74,45 @@ Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in
 
 | | Quick, `ctrl+x e` | Deep, `ctrl+x d` |
 |---|---|---|
-| Call | One `$.model.complete` | One `$.model.fork`, which runs on the session's model and system prompt and reads the whole conversation from the main thread's prompt cache |
-| Model | `quickModel` (default `sonnet`) at `quickEffort` (default `low`) | The session's own. With nothing to fork yet (the first prompt, or just after `/clear`), it falls back to one `$.model.complete` on `deepFallbackModel` (default `opus`), and the hint line says `deep · opus` |
-| Sees | The draft and the house style | The draft, the house style and the conversation |
-| Does | Fixes spelling and grammar. Makes the ask explicit. Turns several asks into a short list, with no headings. Keeps hedges as written. Stays about the same length. | Uses sections, but only those with real content, in this order: Goal, Context, Requirements, Done when, Out of scope, Open questions. Resolves "the bug above" or "that file" into real names. A hedge that changes the work becomes an open question. |
-| Typical time | 2–5 s | 10–30 s, longer on long sessions |
+| Call | An interview in two `$.model.fork` steps, plan then write (F19a). A fork runs on the session's model and system prompt and reads the whole conversation from the main thread's prompt cache |
+| Model | `quickModel` (default `sonnet`) at `quickEffort` (default `low`) | The session's own. With nothing to fork yet (the first prompt, or just after `/clear`), both steps are `$.model.complete` calls on `deepFallbackModel` (default `opus`), and the hint line says `deep · opus` |
+| Sees | The draft and the house style | The draft, the house style, the conversation and, when writing, the answers |
+| Does | Fixes spelling and grammar. Makes the ask explicit. Turns several asks into a short list, with no headings. Keeps hedges as written. Stays about the same length. | Asks up to 4 questions, then writes a structured prompt in six sections (F19), with the answers built in as decisions and no open questions. It resolves "the bug above" or "that file" into real names. |
+| Typical time | 2–5 s | Two waits of 5–10 s each, longer on long sessions: one before the questions, which then come back to back, and one after. A clear draft takes one |
+
+#### 4.4.1 The deep pass's interview
+
+- F19a. **Plan, ask, write.**
+  - The first step sends the conversation and the draft. The model plans every question at once: only what neither the conversation nor the draft settles, and only questions whose answer changes the work, most important first.
+  - If nothing is missing, that step writes the prompt straight away, and a clear draft gets no questions.
+  - Otherwise the questions are asked back to back, with no wait between them. A second step then writes the prompt with the answers.
+- F19b. A question opens in Claude Code's own question dialog (`$.ui.ask`). Its options, in order:
+  - the model's 2 or 3 short answers, the most likely first and marked `(Recommended)`;
+  - **You decide**, which leaves the point to Claude Code (the written prompt leaves it out);
+  - the dialog's own Other, for typing an answer.
+- F19c. At most 4 questions. A plan with more is cut to its first four.
+- F19d. **Esc in the dialog cancels the pass.** The draft stays as it was, and a toast says so.
+- F19e. The timeout (`timeoutMs`) counts each model call, never the time the person spends answering. While a question is up, the hint line reads `✦ deep · question 1 of 2 · esc cancels`.
+- F19f. The result's hint counts the answers: `✦ deep · 2 answers · 228 → 643 chars · ⌃x d undo · ⌃x e quick`.
+- F19g. A write step whose reply holds no `<prompt>` fails the pass, and nothing lands in the box.
 
 ### 4.5 What a pass may do
 
 The full instructions are in A.6. The contract:
 
 - F15. Rewrite, never answer. The output is a prompt for Claude Code to act on, not a reply to it.
-- F16. Never invent. No requirement, file, name, number, constraint or technology without a source in the draft, the house style or the conversation.
+- F16. Never invent. No requirement, file, name, number, constraint or technology without a source in the draft, the house style, the conversation or the person's answers.
 - F17. Keep these verbatim: `@mentions`, paths, identifiers, inline code, code blocks, URLs, error text, quotes and paste placeholders.
 - F18. Keep the author's voice: first person and their terms, with spelling fixed. No pleasantries and no commentary about the rewrite.
-- F19. Deep only:
-  - at most 5 open questions, each answerable in a few words, always the last section;
-  - length at most the larger of 600 characters and 3× the draft, or 1.5× the draft plus 1,500 for drafts over 1,000 characters.
+- F19. Deep only: the prompt uses these sections, in this order, each under a `## ` heading. Each holds a sentence or a few short bullets:
+  1. **Goal**: the outcome wanted, in a sentence or two.
+  2. **Context**: what Claude Code needs to know, such as files, code and earlier decisions, with references resolved from the conversation.
+  3. **Tasks**: the concrete changes, as a list.
+  4. **Scope**: what is in, and what is out.
+  5. **Guardrails**: constraints, and what must not change or break.
+  6. **Success Criteria**: how to tell it is done, as checks that can be verified.
+
+  A section is left out only when there is nothing true to put in it; none is padded. Every answer goes in as a decision, and there are no open questions. Length: at most the larger of 800 characters and 3× the draft. House style (F20) can override the sections.
 
 ### 4.6 House style
 
@@ -161,7 +183,7 @@ The draft stays where it is. Seconds count up, and the same chord cancels.
   we make it rember where i was, per file probably. also maybe q should
   close it from the prompt too not just when the pane has focus idk.
   dont break the tests█
-  ? for shortcuts                         ✦ deep pass · 6s · ⌃x d cancel
+  ? for shortcuts                     ✦ deep · reading · 6s · ⌃x d cancel
 ```
 
 ### 5.3 After a quick pass
@@ -178,9 +200,33 @@ Spelling is fixed and the ask is explicit. The hedges stay, and so does the shap
   ? for shortcuts      ✦ quick · 228 → 239 chars · ⌃x e undo · ⌃x d deep
 ```
 
-### 5.4 After a deep pass
+### 5.4 A deep pass: the interview, then the prompt
 
-This is a session that had already read `tree/hooks/register.tsx`. The fork can name the real code, and it turns the hedges into questions.
+This is a session that had already read `tree/hooks/register.tsx`. The draft's two hedges ("per file probably", "maybe q should…") change the work. While the hint reads `deep · reading`, the deep pass plans a question for each. They then come back to back in Claude Code's own question dialog, drawn by the engine. This sketch shows the dialog's content, not its exact look:
+
+```
+ Scope
+ Remember scroll positions across sessions, or only for this one?
+
+ ❯ 1. Only this session (Recommended)
+   2. Across sessions
+   3. You decide
+   4. Type something.
+```
+
+The person presses `1`, and the second question follows at once:
+
+```
+ q key
+ Should q also close the preview while the prompt has focus?
+
+ ❯ 1. Separate task (Recommended)
+   2. Yes, in this change
+   3. You decide
+   4. Type something.
+```
+
+After `1`, the hint reads `deep · writing`, and the deep pass writes the prompt in its six sections with both answers built in. "Only this session" lands in Scope; "Separate task" puts `q` out of scope. Nothing is left to hand-edit. The hint line is drawn right-aligned in a wider terminal:
 
 ```
   …transcript…
@@ -191,23 +237,26 @@ This is a session that had already read `tree/hooks/register.tsx`. The fork can 
   top.
 
   ## Context
-  - The preview's position is `previewOffsetAtom`, which `openPreview`
-    in `tree/hooks/register.tsx` resets to 0 on every open.
+  - The position is `previewOffsetAtom`, which `openPreview` in
+    `tree/hooks/register.tsx` resets to 0 on every open.
 
-  ## Done when
+  ## Tasks
+  - Keep each file's last position, and restore it when the file
+    reopens.
+
+  ## Scope
+  - In: positions for this session only.
+  - Out: `q` closing the preview from the prompt; that's a separate
+    task.
+
+  ## Guardrails
+  - Don't break the existing `tree` tests.
+
+  ## Success Criteria
   - Reopening a file shows the lines it showed when I left it.
-  - The existing `tree` tests still pass.
-
-  ## Open questions
-  - Remember positions across sessions, or only this one?
-  - Should `q` also close the preview while the prompt has focus?█
-  ? for shortcuts      ✦ deep · 228 → 541 chars · ⌃x d undo · ⌃x e quick
+  - The `tree` tests pass.█
+           ✦ deep · 2 answers · 228 → 643 chars · ⌃x d undo · ⌃x e quick
 ```
-
-From here the person can:
-- answer a question inline (`- Remember positions across sessions, or only this one? This session only.`);
-- delete the questions;
-- press Enter as it is and let Claude ask.
 
 ### 5.5 No chord bound
 
@@ -224,12 +273,12 @@ From here the person can:
 
 - After a chord, the hint line shows the running pass within 100 ms. The draft never leaves the box, so there is nothing else to wait for.
 - Quick: median under 5 s for a 300-word draft on `sonnet` at `low` effort.
-- Deep: under 30 s on a typical session. A fork's time grows with the transcript; on a long session, a trivial fork reply took about 8 s (M0, S11).
+- Deep: each step is one fork, 5–10 s on a typical session. A fork's time grows with the transcript; on a long session, a trivial fork reply took about 8 s (M0, S11). The person waits twice: once before the questions, which come back to back, and once before the result. A clear draft takes one step.
 
 ### 6.2 Cost
 
 - Quick sends its fixed instructions and the house style first, marked for the prompt cache.
-- Deep reads the conversation from the main thread's prompt cache. On a long session that is about 300k cache-read tokens per press (measured 2026-10-11), billed at the cache-read rate. Deep runs only when the person presses its chord.
+- Deep reads the conversation from the main thread's prompt cache once per step. On a long session that is about 150–300k cache-read tokens per step (measured 2026-10-11 and 2026-10-12), billed at the cache-read rate. A pass with questions takes two steps, so it costs twice that. Deep runs only when the person presses its chord, and a clear draft takes one step.
 
 ### 6.3 Never losing text
 
@@ -260,7 +309,8 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 | **Plugins cannot register keybinding actions.** A chord reaches a plugin from the prompt only through a Button whose `action` names an engine action. The person's chord for that action presses it while the Button is mounted, no dialog is up, and no engine handler of that action is mounted. | Both chords depend on borrowing engine actions, and the person binds them once. A future build could mount those actions' handlers or rename them. | `diff:back` and `diff:nextSource` are handled only inside the modal diff dialog, which blocks plugin Buttons anyway. `quickAction` and `deepAction` are pickers, and `/enrich keys install` does the binding. Re-run M0's probes S1 and P1 on every Claude Code update. |
 | The result overwrites the draft. | A bad rewrite replaces good text. | It is applied only over the exact text it started from (F7). The same chord undoes it (F10). `/enrich original` restores it after edits (F14). |
 | The rewrite invents requirements or drops something. | A wrong prompt is sent with confidence. | Strict rules (A.6), the verbatim check (F12), and undo one chord away. |
-| A deep pass is slow and reads a lot of cache on long sessions. | Waiting, and cost. | It is opt-in per press. The seconds show in the hint line, and either chord cancels. Quick is the cheap default. |
+| A deep pass is slow and reads a lot of cache on long sessions, once per step. | Waiting before the questions and before the result, and cost. | It is opt-in per press. It asks only what changes the work, at most 4 questions, and none about a clear draft. The seconds show in the hint line; either chord cancels while it thinks, and Esc cancels while it asks. Quick is the cheap default. |
+| The model asks what the conversation already settles, or asks too much. | The interview feels like a chore. | The instructions forbid it (A.6), and the cap is 4. Every question offers "You decide", and Esc ends it. |
 | A paste placeholder that goes back into the box may not still be bound to its image. | An image could detach after a pass. | Deferred to a later pass (§4.8). Meanwhile the verbatim check names a placeholder the rewrite dropped, and undo is one chord away. |
 | A long deep result makes the prompt box tall. | The transcript gets less room while editing. | Deep's length cap (F19). `ctrl+g` opens the external editor. |
 | A hot reload drops module variables. | A pass in flight is lost. | The draft never left the box. A reload mid-pass just ends the pass. |
@@ -269,7 +319,7 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 
 - No lost text: across the tests and a week of use, every path leaves the original reachable.
 - A clear one-liner comes back from a quick pass at most 1.3× its length, with no headings.
-- On 10 real brain dumps, a deep pass returns Goal and Done when, and no requirement lacks a source in the draft, house style or conversation.
+- On 10 real brain dumps, a deep pass asks at most 3 questions on average, never one the conversation already answers. Its result uses the six sections with real content in each (Goal, Tasks and Success Criteria always), and no requirement lacks a source in the draft, house style, conversation or answers.
 - Chord to running hint: under 100 ms. Quick median under 5 s.
 - After a week, the person's own judgment is that they reach for `⌃x d` on brain dumps, `⌃x e` on sloppy one-liners, and Enter on the rest.
 
@@ -279,7 +329,7 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 |---|---|---|
 | M0 Spike | A throwaway mod running the probes in §10.1. Round 3 is a working prototype of both chords. | Every row of §10.1 has a result, and the person has used both chords live and agreed v0.2. |
 | M1 Quick pass | <ul><li>Manifest and state contract</li><li>Both chord Buttons and the hint line</li><li>`/enrich`, `keys`, `keys install`, `original` and `last`</li><li>The quick brain</li><li>Apply only over the start text; undo; cancel; errors</li><li>The verbatim check</li></ul> | `⌃x e` on a draft replaces it with a tidied version, and `⌃x e` again restores it. `claude plugin validate`, `tsc -p` and `claude plugin test` are green. |
-| M2 Deep pass | <ul><li>The fork, with its `opus` fallback</li><li>The timeout</li><li>House style</li></ul> | In a session that discussed a bug, `⌃x d` on "fix the bug above" names the real file. In a fresh session it falls back and says so. |
+| M2 Deep pass | <ul><li>The interview: one fork plans the questions, they come back to back in `$.ui.ask` (at most 4, Esc cancels), one fork writes</li><li>The six sections</li><li>The `opus` fallback</li><li>A timeout per model call</li><li>House style</li></ul> | In a session that discussed a bug, `⌃x d` on "fix the bug above" names the real file and asks only what the conversation doesn't settle. A clear draft gets no questions. In a fresh session it falls back and says so. |
 | M3 Ship | <ul><li>README</li><li>A root `marketplace.json` entry and a root README row</li><li>Tests on `terminal` and `desktop`</li></ul> | `/plugin install enrich --marketplace jyerxa/agent-skills` works on a clean machine, and the tests are green. |
 
 ## 10. Decision log
@@ -300,6 +350,10 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 | 2026-10-12 | PRD v0.2 approved by the person after using both chords in the round 3 prototype, including the additions above. |
 | 2026-10-12 | M1: drafts starting with `#` are no longer refused (F4), since deep results start with a heading. A test cannot raise the person's own `prompt.edit`, so retiring the result's hint on the first edit is checked live, not in `flow.test.tsx`. |
 | 2026-10-12 | M1 checked live by the person: the quick pass, undo by the same chord, the hint retiring on the first edit, a result not applied after typing mid-pass, and the hint line's look. Images through a pass are deferred to a later pass. |
+| 2026-10-12 | M2 built:<ul><li>The deep pass forks the session and falls back to `deepFallbackModel` when there is nothing to fork.</li><li>A deadline timer at `timeoutMs` fails any pass, since a fork takes no abort signal.</li><li>House style is read on every pass.</li><li>`deepAction` is a picker, held apart from `quickAction`.</li><li>`/enrich keys install` binds both chords.</li><li>A deep result's hint names the model only when it fell back (`deep · opus`).</li></ul> |
+| 2026-10-12 | Before checking M2 live, the person rejected the deep pass as written: "It's not going to speed the user up or help them organize thoughts if we just dump them in a longer document to hand edit." They asked for an interview. v0.3: the deep pass asks one question at a time in Claude Code's own question dialog (`$.ui.ask`), then writes a compact prompt with the answers built in. The person chose:<ul><li>an adaptive flow, each answer read before the next question, over planning every question in one step;</li><li>Esc in a question cancels the pass, over writing with the answers so far.</li></ul>Added in the design: "You decide" on every question, at most 4 questions, and a timeout that counts model calls only. |
+| 2026-10-12 | Before checking the adaptive interview live, the person changed two things:<ul><li>Plan then ask replaces the adaptive flow: one step plans every question, they come back to back with no waits, and one step writes. Two waits in all, instead of one per question.</li><li>A more structured prompt: the deep pass writes under Goal, Context, Tasks, Scope, Guardrails and Success Criteria by default (F19), replacing the compact paragraph-and-bullets form. A section with nothing true to say is left out. The length cap rose to the larger of 800 characters and 3× the draft to fit the sections.</li></ul>The quick pass keeps no headings. |
+| 2026-10-12 | M2 checked live by the person ("that worked pretty well"): plan, then questions back to back in the dialog, then the six-section prompt. The fresh-session fallback (P6) is still to be checked live. |
 
 ### 10.1 M0 probes
 
@@ -330,6 +384,7 @@ Round 3 is the two-chord prototype:
 | P4 | `[Image #1]` kept by a pass: after the fill, does Enter still attach the image? | Attachment policy (§7) | **Deferred.** The person set images aside for a later pass (§4.8). |
 | P5 | Typing while a pass runs: the result isn't applied, and a toast says so | F7 | **Works live** (M1). |
 | P6 | A deep pass while idle, while a turn runs, and in a fresh session (`nothing-to-fork`, then `opus`) | Deep fallback | |
+| P7 | `$.ui.ask` from a pass started by a chord, outside any turn: does the question dialog open, and does Esc reject the call? | The interview (F19b, F19d) | **Works live** (M2): the dialog opens from the chord, and the interview runs through to a written prompt. |
 | S4 | Does the hint line's left side (the engine's pills) look normal next to the chords? | The hint host | **Looks normal live** (M1). |
 
 ## Appendix A. Technical design
@@ -344,8 +399,8 @@ claude/plugins/in-progress/enrich/
   docs/PRD.md                  this file
   hooks/hooks.json             { "modules": ["./register.tsx"] }
   hooks/register.tsx           every hook, every atom, every function that takes $, all JSX
-  hooks/meta.ts                the quick and deep instructions and the per-call prompt (A.6)
-  hooks/parse.ts               parseReply (A.5)
+  hooks/meta.ts                the quick and deep instructions, house style, each deep step's message (A.6)
+  hooks/parse.ts               parseReply, parsePlan (A.5)
   hooks/preserve.ts            tokens that must survive; which went missing (F12)
   hooks/draft.ts               classifyDraft: empty, command, bash, ok
   hooks/keys.ts                find the chord bound to an action; label it (⌃x e); merge bindings
@@ -365,10 +420,15 @@ export type EnrichJob = {
   source: string      // the text being improved
   box: string         // what the box held at the start; it must still hold it to apply
   startedAt: number
+  phase: 'reading' | 'asking' | 'writing'   // the model reading (quick, or deep planning), the person answering, deep writing
+  asked: number       // the deep pass's question on screen, from 1
+  questions: number   // how many it planned
 }
 export type EnrichResult = {
   pass: EnrichPass; original: string; text: string
-  model: string; warnings: string[]
+  model: string       // 'session' for a fork
+  answers: number     // questions answered on the way
+  dropped: string[]   // must-keep tokens the result lost (F12)
 }
 
 declare module 'claude-code' {
@@ -383,7 +443,7 @@ declare module 'claude-code' {
 }
 ```
 
-Module variables, lost on reload (which is fine): the parsed config, the `AbortController` of a `complete` call, and the ticker. `$.store` holds `last` (F14).
+Module variables, lost on reload (which is fine): the parsed config, the `AbortController` of a `complete` call, the ticker and the deadline. `$.store` holds `last` (F14). The deep pass's plan and answers live in the running interview's own scope; a reload ends the pass.
 
 ### A.3 Hooks
 
@@ -405,8 +465,8 @@ One top-level `chord($, pass)` decides what a press does:
 
 - A press only writes state and schedules the call with `$.clock.after(0, …)`, so the model call never runs inside the press's dispatch.
 - Every pass carries an id. A result whose id is no longer `job.id` is dropped; this is how cancel works for `fork`, which takes no abort signal.
-- `complete` calls get an `AbortController` and `timeoutMs`. A fork gets a `$.clock.after(timeoutMs)` timer that fails the pass.
-- A `$.clock.every(1000)` ticker writes `elapsed` while a pass runs.
+- Each model call (`beginCall`) resets `elapsed`, starts a `$.clock.every(1000)` ticker, and arms a `$.clock.after(timeoutMs)` deadline that fails the pass. Both stop when the call returns, so neither runs while a question is up. `complete` calls also get an `AbortController` and `timeoutMs`.
+- The deep pass runs `deepStep('plan')`, a fork or the fallback completion. If the reply is a prompt, it lands. Otherwise the first four questions are asked through `$.ui.ask` one after another, and `deepStep('write')` writes with the answers. Once the plan step falls back, the write step uses the fallback too. A rejected `$.ui.ask` (Esc) ends the pass.
 - Applying a result:
   1. read the box;
   2. compare it with `job.box`;
@@ -422,13 +482,50 @@ The model replies `<prompt>…the improved prompt…</prompt>` and nothing else.
 3. With no tag at all, it unwraps a single code fence around the whole reply.
 4. It trims the result. An empty result is an error (F13).
 
-### A.6 Instructions (draft, as running in the round 3 spike)
+The deep pass's plan step replies with one of two forms, read by `parsePlan`. The first is one block per question, most important first:
 
-Shared tail, used by both passes:
+```
+<question header="Scope">
+Remember positions across sessions, or only this one?
+<option>Only this session</option>
+<option>Across sessions</option>
+</question>
+```
+
+The second is a `<prompt>…</prompt>` as above.
+- Questions come first when both appear.
+- A question's text is its block minus the options.
+- A block with no text is skipped.
+- The header is cut to the dialog's 12 characters, or reads `Question` when missing.
+
+The write step must reply with a tagged `<prompt>`. Deep is strict where quick is lenient: a reply in neither form fails the pass, so a question is never pasted into the box as a prompt.
+
+### A.6 Instructions (`hooks/meta.ts`)
+
+`instructions(step, style)` assembles each step's instructions. The steps are `quick`, `plan` (the deep pass's first step) and `write` (its last). The order is:
+1. the step's own head (below);
+2. for `plan` and `write`, how to write the prompt: the six sections;
+3. the shared rules;
+4. the house style, when there is one;
+5. the reply format.
+
+Each deep step's message follows its instructions:
+- `plan`: the draft, as `<draft>…</draft>`;
+- `write`: the draft, then `<answers>` with each question and its answer as `Q (header): …` then `A: …`.
+
+Text the person typed has any closing tag escaped. A "You decide" answer reads `You decide (left to Claude Code)`.
+
+The shared rules name only the sources the step has:
+- quick: "the draft";
+- plan: "the draft or the conversation";
+- write: "the draft, the conversation or the developer's answers";
+- any step adds "the house style" when there is one.
+
+Shared rules and the quick pass's reply format:
 
 ```
 Never invent. Every requirement, constraint, file, name, number and
-technology must come from the draft or the conversation.
+technology must come from <the pass's sources>.
 
 Keep verbatim: @mentions, file paths, identifiers, inline code and code
 blocks, URLs, error messages, quoted text, and placeholders such as
@@ -436,6 +533,8 @@ blocks, URLs, error messages, quoted text, and placeholders such as
 
 Keep the author's voice: first person, their terms. No pleasantries and no
 commentary about the rewrite.
+
+<house style, when there is one>
 
 Reply with exactly this and nothing else:
 <prompt>
@@ -460,36 +559,79 @@ Make a light pass:
   nearly unchanged.
 ```
 
-Deep (the head of the fork's prompt; the `system` of the fallback):
+Deep plan and write steps (the head of each fork's message; the `system` of the fallback). Both open with:
 
 ```
 Stop: don't continue the conversation and don't call tools. The developer
-has drafted their next prompt for this session and wants it rewritten
-before they send it. Return the draft rewritten so Claude Code can act on
-it well; never answer it or do the work.
-
-Restructure it:
-- Use only the sections that have real content, in this order: Goal,
-  Context, Requirements, Done when, Out of scope, Open questions. A short
-  draft can stay one tight paragraph plus "Done when".
-- Use the conversation, when there is one, to resolve references ("the
-  bug above", "that file") into concrete names. Add a Context section only
-  with facts from it that the work needs.
-- When something the work depends on is missing or ambiguous, ask instead
-  of guessing: put it under "## Open questions" as the last section, at
-  most 5, each answerable in a few words. A hedge that changes what gets
-  built becomes a question; one that doesn't stays as written.
-- Length: at most the larger of 600 characters and 3 times the draft.
+has drafted their next prompt for this session and wants it to be a good
+one before they send it. Never answer the draft or do the work it asks for.
 ```
 
-Appended when present: `## House style (yours)` and `## House style (this project)`, then "Where they conflict, follow this project's." The draft goes last, as `<draft>…</draft>`, with any `</draft>` inside it escaped.
+The plan step goes on:
+
+```
+First find out what is missing. List the points the work depends on that
+are missing or ambiguous and that neither the conversation nor the draft
+settles: only those whose answer changes the work, most important first,
+at most 4. Each is one question with 2 or 3 short answers (1 to 5 words
+each), the most likely first; the developer can also type their own or
+leave it to Claude Code. The questions are asked one after another, so
+make each stand on its own.
+
+If nothing is missing, don't ask: write the prompt straight away.
+```
+
+The write step goes on instead:
+
+```
+You asked them about the draft, and their answers are below it. Now write
+the prompt.
+```
+
+Both then carry how to write it:
+
+```
+How to write the prompt. Use these sections, in this order, each under a
+"## " heading, each a sentence or a few short bullets:
+- Goal: the outcome wanted, in a sentence or two.
+- Context: what Claude Code needs to know to do it well: files, code,
+  earlier decisions. Use the conversation to resolve references ("the bug
+  above", "that file") into concrete names.
+- Tasks: the concrete changes to make, as a list.
+- Scope: what is in, and what is out.
+- Guardrails: constraints, and what must not change or break.
+- Success Criteria: how to tell it is done, as checks that can be
+  verified.
+Leave a section out only when there is nothing true to put in it; never
+pad one. Build every answer in as a decision where it belongs; where the
+developer left something to Claude Code, leave it out. No open questions.
+Length: at most the larger of 800 characters and 3 times the draft.
+```
+
+The plan step's reply format, in place of the quick one (the write step uses the quick one):
+
+```
+Reply in exactly one of these two forms and nothing else.
+To ask, one block per question, most important first:
+<question header="one or two words">
+the question, ending in a question mark
+<option>the most likely answer</option>
+<option>another answer</option>
+</question>
+To write:
+<prompt>
+the prompt
+</prompt>
+```
+
+House style, when either file has any: `## House style (yours)` and `## House style (this project)`, then "Where they conflict, follow this project's." when both exist. Each file is read up to 8,000 characters. When the project root is the home folder, the one file is read once, as yours.
 
 ### A.7 Tooling and tests
 
 - `claude plugin validate`, `tsc -p` and `claude plugin test` on the plugin folder, as for `tree`.
 - Unit tests, one file per pure module:
-  - **parse:** a tagged reply; a missing closing tag; a fenced reply; an empty reply.
-  - **meta:** quick and deep prompts; the project's house style over the person's; `</draft>` escaped.
+  - **parse:** a tagged reply; a missing closing tag; a fenced reply; an empty reply; a deep plan's question blocks, a prompt, or neither.
+  - **meta:** each step's sources; the six sections in order in both deep steps; the write message's answers; the project's house style over the person's; closing tags escaped.
   - **preserve:** mentions, paths, code spans, URLs and placeholders found; missing ones named.
   - **draft:** classification.
   - **keys:** chord lookup and labels; merging (a taken chord refused; a new file gets `$schema` and `$docs`).
@@ -507,7 +649,8 @@ Appended when present: `## House style (yours)` and `## House style (this projec
     - cancel ignores the late result;
     - a draft changed mid-pass leaves the box alone and toasts;
     - an error leaves the box alone;
-    - deep falls back on `nothing-to-fork`;
+    - deep falls back on `nothing-to-fork`, for every step;
+    - the interview: one plan step, its questions back to back in the dialog with "You decide" last, the answers carried into one write step, the hint through reading, each question and writing, Esc cancelling, no timeout while answering, a plan cut to four questions, and a write step with no prompt failing the pass;
     - a dropped mention is named;
     - `/` and `!` drafts are refused;
     - an unbound chord;
