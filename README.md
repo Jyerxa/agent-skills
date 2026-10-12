@@ -69,6 +69,7 @@ also a plugin marketplace, so one line inside Claude Code installs any of them:
 | Plugin | Description |
 | --- | --- |
 | [`tree`](claude/plugins/in-progress/tree) | A live file tree pane beside the transcript: the whole working directory, git status colors and badges, and a shimmer on the file Claude is editing. Needs the fullscreen terminal layout (`/tui fullscreen`). |
+| [`enrich`](claude/plugins/in-progress/enrich) | Improve a draft prompt in place. `ctrl+x e` tidies it; `ctrl+x d` asks you a few questions in Claude Code's own dialog, then writes a structured prompt (Goal, Context, Tasks, Scope, Guardrails, Success Criteria). The same chord puts your original back. Run `/enrich keys install` once to bind the chords. |
 
 To run one from a checkout without installing: `claude --plugin-dir claude/plugins/in-progress/tree`.
 
