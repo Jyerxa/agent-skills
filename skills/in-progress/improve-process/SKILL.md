@@ -1,6 +1,6 @@
 ---
 name: improve-process
-description: 'Propose evidence-linked improvements to a captured existing or envisioned business process, with alternatives, tradeoffs, and ways to test the expected benefit. Use when asked to improve how work happens or is planned; keep proposals separate from the faithful baseline. Not for process capture, visualization alone, or automatic implementation.'
+description: 'In progress: Propose evidence-linked improvements to a captured existing or envisioned business process, with alternatives, tradeoffs, and ways to test the expected benefit. Use when asked to improve how work happens or is planned; keep proposals separate from the faithful baseline. Not for process capture, visualization alone, or automatic implementation.'
 ---
 
 # Improve a process

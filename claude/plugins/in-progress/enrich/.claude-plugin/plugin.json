@@ -1,7 +1,7 @@
 {
   "name": "enrich",
   "version": "0.2.0",
-  "description": "Improve a draft prompt in place: ctrl+x e runs a quick pass that tidies it, ctrl+x d a deep pass that reads the conversation and restructures it. The same chord puts your original back.",
+  "description": "In progress: Improve a draft prompt in place: ctrl+x e runs a quick pass that tidies it, ctrl+x d a deep pass that reads the conversation and restructures it. The same chord puts your original back.",
   "author": { "name": "jeremiah" },
   "types": "./types/index.d.ts",
   "userConfig": {

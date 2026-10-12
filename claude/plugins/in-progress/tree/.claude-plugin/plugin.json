@@ -1,7 +1,7 @@
 {
   "name": "tree",
   "version": "0.1.0",
-  "description": "A live file tree pane: the whole working directory, git status colors, and a shimmer on the file Claude is editing.",
+  "description": "In progress: A live file tree pane: the whole working directory, git status colors, and a shimmer on the file Claude is editing.",
   "author": { "name": "jeremiah" },
   "types": "./types/index.d.ts",
   "userConfig": {
