@@ -6,6 +6,11 @@
       "name": "tree",
       "source": "./claude/plugins/in-progress/tree",
       "description": "A live file tree pane: the whole working directory, git status colors, and a shimmer on the file Claude is editing."
+    },
+    {
+      "name": "enrich",
+      "source": "./claude/plugins/in-progress/enrich",
+      "description": "Improve a draft prompt in place: ctrl+x e tidies it; ctrl+x d interviews you, then writes a structured prompt. The same chord puts your original back."
     }
   ]
 }
