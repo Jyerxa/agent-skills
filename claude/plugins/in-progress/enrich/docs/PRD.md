@@ -50,7 +50,7 @@ Identity: plugin id `enrich`, slash command `/enrich`, folder `claude/plugins/in
   - The person binds the two chords once, in the Chat context (F21).
   - The Buttons are mounted only while the box holds a draft or a pass is running.
 - F3. While a draft is typed, the hint line shows the chords at its right end (§5.1). Each label can also be clicked. That is how the desktop app runs a pass, since chords work only in the terminal.
-- F4. Drafts that are commands or modes are refused with a toast and left untouched: anything starting with `/`, `!` or `#`. On an empty box the chords do nothing.
+- F4. Slash commands and bash lines are refused with a toast and left untouched: anything starting with `/` or `!`. A leading `#` is not refused, because a deep result starts with `## Goal` and a pass on it must still run. On an empty box the chords do nothing.
 
 ### 4.2 While a pass runs
 
@@ -132,6 +132,7 @@ Configuration (`userConfig`, each a row in the config menu):
 - A grounded deep pass: a read-only subagent opens the files the draft mentions before rewriting.
 - A repository snapshot (git status, top-level listing, CLAUDE.md) for the quick pass and the deep fallback.
 - `/enrich history`.
+- Pasted images through a pass: check that an `[Image #1]` placeholder still attaches its image after the fill (probe P4), and refuse or warn if it doesn't.
 
 ## 5. Visual design
 
@@ -260,7 +261,7 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 | The result overwrites the draft. | A bad rewrite replaces good text. | It is applied only over the exact text it started from (F7). The same chord undoes it (F10). `/enrich original` restores it after edits (F14). |
 | The rewrite invents requirements or drops something. | A wrong prompt is sent with confidence. | Strict rules (A.6), the verbatim check (F12), and undo one chord away. |
 | A deep pass is slow and reads a lot of cache on long sessions. | Waiting, and cost. | It is opt-in per press. The seconds show in the hint line, and either chord cancels. Quick is the cheap default. |
-| A paste placeholder that goes back into the box may not still be bound to its image. | An image could detach after a pass. | M0 probe P4. If it detaches, drafts holding image placeholders are refused with a toast until the engine keeps them. |
+| A paste placeholder that goes back into the box may not still be bound to its image. | An image could detach after a pass. | Deferred to a later pass (§4.8). Meanwhile the verbatim check names a placeholder the rewrite dropped, and undo is one chord away. |
 | A long deep result makes the prompt box tall. | The transcript gets less room while editing. | Deep's length cap (F19). `ctrl+g` opens the external editor. |
 | A hot reload drops module variables. | A pass in flight is lost. | The draft never left the box. A reload mid-pass just ends the pass. |
 
@@ -297,6 +298,8 @@ The plugin writes to the box only when the box holds exactly the text the pass s
 | 2026-10-12 | The second borrowed action is `diff:nextSource`. Like `diff:back`, its only handler is inside the modal diff dialog. |
 | 2026-10-12 | Additions not asked for: the verbatim check and its hint (F12); `/enrich original` and `/enrich last` (F14); refusing a pass when the draft changed mid-run (F7); clickable labels for desktop. |
 | 2026-10-12 | PRD v0.2 approved by the person after using both chords in the round 3 prototype, including the additions above. |
+| 2026-10-12 | M1: drafts starting with `#` are no longer refused (F4), since deep results start with a heading. A test cannot raise the person's own `prompt.edit`, so retiring the result's hint on the first edit is checked live, not in `flow.test.tsx`. |
+| 2026-10-12 | M1 checked live by the person: the quick pass, undo by the same chord, the hint retiring on the first edit, a result not applied after typing mid-pass, and the hint line's look. Images through a pass are deferred to a later pass. |
 
 ### 10.1 M0 probes
 
@@ -323,11 +326,11 @@ Round 3 is the two-chord prototype:
 |---|---|---|---|
 | P1 | `ctrl+x d` bound to `diff:nextSource` fires its hint Button, with `tree` open | The deep chord | **Works.** It fired the deep Button, and the new binding applied without a restart. |
 | P2 | Both passes end to end: time, usage, a multi-line result filled into the box, cursor at the end, Enter sending it | The brains; F9 | **Both work.** Each result filled the box with the cursor at the end. Quick on `sonnet`: 1.2 s, 395 tokens in and 15 out. Its instructions are too short to cache yet (0 cache read). Deep by fork on this long session: 5.0 s, 511 in and 421 out, 166k cache read. Enter after a fill not yet checked. |
-| P3 | Does the box's own undo (`ctrl+_`) revert a plugin's fill? What does `prompt.edit` see? | Whether F10 needs mentioning beside `ctrl+_` | |
-| P4 | `[Image #1]` kept by a pass: after the fill, does Enter still attach the image? | Attachment policy (§7) | |
-| P5 | Typing while a pass runs: the result isn't applied, and a toast says so | F7 | |
+| P3 | Does the box's own undo (`ctrl+_`) revert a plugin's fill? What does `prompt.edit` see? | Whether F10 needs mentioning beside `ctrl+_` | **Moot.** In Windows Terminal `ctrl+_` never reaches Claude Code; the terminal zooms out instead. The same chord is the undo (F10). |
+| P4 | `[Image #1]` kept by a pass: after the fill, does Enter still attach the image? | Attachment policy (§7) | **Deferred.** The person set images aside for a later pass (§4.8). |
+| P5 | Typing while a pass runs: the result isn't applied, and a toast says so | F7 | **Works live** (M1). |
 | P6 | A deep pass while idle, while a turn runs, and in a fresh session (`nothing-to-fork`, then `opus`) | Deep fallback | |
-| S4 | Does the hint line's left side (the engine's pills) look normal next to the chords? | The hint host | |
+| S4 | Does the hint line's left side (the engine's pills) look normal next to the chords? | The hint host | **Looks normal live** (M1). |
 
 ## Appendix A. Technical design
 
@@ -344,7 +347,7 @@ claude/plugins/in-progress/enrich/
   hooks/meta.ts                the quick and deep instructions and the per-call prompt (A.6)
   hooks/parse.ts               parseReply (A.5)
   hooks/preserve.ts            tokens that must survive; which went missing (F12)
-  hooks/draft.ts               classifyDraft: empty, command, bash, memory, ok
+  hooks/draft.ts               classifyDraft: empty, command, bash, ok
   hooks/keys.ts                find the chord bound to an action; label it (⌃x e); merge bindings
   hooks/*.test.ts              one per pure module
   hooks/flow.test.tsx          integration: the hint line and the box, on terminal and desktop
@@ -506,7 +509,7 @@ Appended when present: `## House style (yours)` and `## House style (this projec
     - an error leaves the box alone;
     - deep falls back on `nothing-to-fork`;
     - a dropped mention is named;
-    - `/`, `!` and `#` drafts are refused;
+    - `/` and `!` drafts are refused;
     - an unbound chord;
     - `/enrich original` and `/enrich last`;
     - `/clear` mid-pass;
