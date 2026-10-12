@@ -1,6 +1,6 @@
 ---
 name: visualize-process
-description: Turn a captured business process into a clear, animated HTML explanation with scenario walkthroughs, inspectable rules and relationships, and visible uncertainty. Use to understand a process model, not to interview for missing facts, redesign the process, or simulate invented behavior.
+description: 'In progress: Turn a captured business process into a clear, animated HTML explanation with scenario walkthroughs, inspectable rules and relationships, and visible uncertainty. Use to understand a process model, not to interview for missing facts, redesign the process, or simulate invented behavior.'
 ---
 
 # Visualize a process

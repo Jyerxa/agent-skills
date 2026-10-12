@@ -30,11 +30,16 @@ globally with `-g`).
 
 ## Skills
 
+Skills and plugins marked **In progress** still live under an `in-progress/`
+folder. They work, but they are still taking shape, and their behaviour and
+outputs may change between updates. The installers show the label at the start
+of the description.
+
 | Skill | Description |
 | --- | --- |
-| [`capture-process`](skills/in-progress/capture-process) | Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
-| [`visualize-process`](skills/in-progress/visualize-process) | Turn a captured process into a portable, animated HTML explorer with case walkthroughs, inspectable evidence and relationships, and visible uncertainty. |
-| [`improve-process`](skills/in-progress/improve-process) | Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
+| [`capture-process`](skills/in-progress/capture-process) | **In progress.** Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
+| [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a portable, animated HTML explorer with case walkthroughs, inspectable evidence and relationships, and visible uncertainty. |
+| [`improve-process`](skills/in-progress/improve-process) | **In progress.** Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
 | [`system-discovery`](skills/system-discovery) | Guide an interview from a rough software idea to a system brief covering purpose, users, workflows, responsibilities, rules, and scope - ready to inform codebase design. |
 | [`pattern-design`](skills/pattern-design) | Turn a system design spec or PRD into a disciplined pattern-based design — which patterns to apply, where, why — plus repo-ready agent instructions that enforce it. |
 | [`jy-codebase-analysis`](skills/jy-codebase-analysis) | Deep, evidence-backed analysis of an existing codebase: an orchestrator surveys the repo and fans out subagents to read every file, then synthesizes a business overview, a business-logic catalog (calculations captured as business rules), an architecture overview with Mermaid diagrams, and a layer-by-layer engineering-patterns report. Works in Claude Code, Cursor, Codex, and Copilot. |
@@ -68,8 +73,8 @@ also a plugin marketplace, so one line inside Claude Code installs any of them:
 
 | Plugin | Description |
 | --- | --- |
-| [`tree`](claude/plugins/in-progress/tree) | A live file tree pane beside the transcript: the whole working directory, git status colors and badges, and a shimmer on the file Claude is editing. Needs the fullscreen terminal layout (`/tui fullscreen`). |
-| [`enrich`](claude/plugins/in-progress/enrich) | Improve a draft prompt in place. `ctrl+x e` tidies it; `ctrl+x d` asks you a few questions in Claude Code's own dialog, then writes a structured prompt (Goal, Context, Tasks, Scope, Guardrails, Success Criteria). The same chord puts your original back. Run `/enrich keys install` once to bind the chords. |
+| [`tree`](claude/plugins/in-progress/tree) | **In progress.** A live file tree pane beside the transcript: the whole working directory, git status colors and badges, and a shimmer on the file Claude is editing. Needs the fullscreen terminal layout (`/tui fullscreen`). |
+| [`enrich`](claude/plugins/in-progress/enrich) | **In progress.** Improve a draft prompt in place. `ctrl+x e` tidies it; `ctrl+x d` asks you a few questions in Claude Code's own dialog, then writes a structured prompt (Goal, Context, Tasks, Scope, Guardrails, Success Criteria). The same chord puts your original back. Run `/enrich keys install` once to bind the chords. |
 
 To run one from a checkout without installing: `claude --plugin-dir claude/plugins/in-progress/tree`.
 
