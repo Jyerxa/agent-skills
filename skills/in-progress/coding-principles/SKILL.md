@@ -13,7 +13,7 @@ Apply to every code change.
 
 **Smallest change.** Make the smallest change that fully solves the problem. Where removing code gives the same result as adding it, remove. Add no abstraction, option, or file the task does not need. Fix causes, not symptoms.
 
-**Simplest design.** Simplicity governs every change, not only refactors. Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Delete dead code in the lines you touch. Choose the design with the least code and the least for a reader to hold in mind.
+**Simplest design.** Simplicity governs every change, not only refactors. Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Ask what the change lets you delete or rewrite before you add to it. Choose the design with the least code and the least for a reader to hold in mind.
 
 **Reuse first.** Before writing a helper or adding a dependency, search the codebase, the standard library, and the dependencies already installed.
 

@@ -255,7 +255,7 @@ PR #26 review round 1 (user notes):
 - Product design moved out of the skill to `principles/in-progress/product-design.md` (product design and coding are different activities). Removed from the SKILL.md index and the skill's topic files.
 - Simplicity made near always-on: new "Simplest design" always-rule in SKILL.md that sends the agent to `simplicity.md` on every change.
 - Redesign when the design stops fitting: trigger broadened from "special cases in more than one place" to any added or changed requirement. This supersedes the earlier tightening.
-- Subtract before you add: applies to every change, not only cluttered code.
+- Subtract before you add: applies to every change, not only cluttered code. Opened up from dead-code removal to "what does the new requirement let me delete?", including deleting and rewriting the whole block instead of bolting on. Dead-code safety rules kept (reference search, restore on purpose, report if unsure).
 - Design for the least code: moved up before Minimize reader load; trigger no longer mentions over-design (an agent does not know it is over-designing).
 - Minimize reader load: "Cut" became "Minimize"; trigger covers designing, writing, and refactoring.
 

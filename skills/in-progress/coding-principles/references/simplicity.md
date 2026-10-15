@@ -6,7 +6,7 @@ When you add or change a requirement, compare the current design with the one yo
 Use when: adding or changing any requirement, behavior, or case.
 
 ## Subtract before you add
-Whenever you change code, delete dead code in the lines you are changing when a search finds no references, including strings, config, and tests. If a removal breaks something, restore it on purpose. If you cannot tell whether code is dead, leave it and report it.
+Before adding code for a change, ask what the change lets you remove: code the new requirement makes unnecessary, and dead paths, strings, config, and tests with no references. Then ask whether deleting the whole block and rewriting it is simpler than adding to it. If so, rewrite it. If a removal breaks something, restore it on purpose. If you cannot tell whether code is dead, leave it and report it.
 
 Use when: making any change.
 
