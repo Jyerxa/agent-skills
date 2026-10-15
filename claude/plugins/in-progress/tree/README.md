@@ -67,7 +67,7 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 |---|---|
 | Move through the tree | ↑ ↓ or `j` `k` while focused move the row cursor (the `▍` row); PgUp PgDn a page, Home End the ends. The window follows the cursor; the wheel scrolls without moving it |
 | Read a file | click it, or Enter on the cursor's row: the file opens above the prompt, where plan mode shows, as wide as the transcript and highlighted with line numbers. The tree stays in the pane and keeps the keyboard: ↑ ↓ / `j` `k`, PgUp PgDn and Home End scroll the file, the wheel over it does too, and `q` (or the `‹` path row) closes it with the cursor where it was |
-| Fold or unfold a folder | click it, or Enter on it |
+| Fold or unfold a folder | click it, or Enter on it. Folders named in `collapsedFolders` (`node_modules` by default) start folded, with a dim count of changed files; open one the same way, and your choice is remembered |
 | Mention a file in your next prompt | `m` on the cursor's row, or in the preview: `@path ` lands at the composer's cursor (a folder mentions as `@folder/ `) |
 | Open a file in your editor | `o` on the cursor's row, or in the preview at the top line in view; runs the `editor` setting |
 | See what changed | `g` while focused, or `/tree changes`: changed files grouped by state with `+added −removed` counts; `g` again returns to the tree |
@@ -79,7 +79,7 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 | Scroll | the wheel |
 | Show gitignored entries | `h` while focused |
 | Refresh now | `r` while focused, or `/tree refresh` |
-| Fold or unfold everything | `c` / `e` while focused |
+| Fold or unfold everything | `c` / `e` while focused. `e` leaves the folders that start folded folded; open those one at a time |
 | Scroll to a file | `/tree reveal <path>` |
 | Mention or preview from the prompt | `/tree mention <path>`, `/tree preview <path>` |
 
@@ -105,6 +105,8 @@ Each field is a row in `/config` under the plugin's name.
 | `shimmer` | `sweep` | `sweep`, `pulse` (the name breathes in color once a second, for reduced motion) or `off`. |
 | `showIgnored` | false | Show gitignored entries, dimmed. |
 | `compactFolders` | true | Draw single-child folder chains on one row. |
+| `collapsedFolders` | `node_modules` | Comma-separated folder names, matched at any depth, drawn folded until you open them. Their contents are listed only when you first open one, so a huge `node_modules` costs nothing while folded and stays out of find. Claude working inside one does not open it; `/tree reveal` and the pinned file line do. Empty folds nothing. |
+| `hiddenFolders` | *(empty)* | Comma-separated folder names, matched at any depth, left out of the tree and its find, as `.git` always is (`dist, .venv`). The Changes view still lists their changes, since it shows what git reports. Wins over `collapsedFolders`. |
 | `accent` | `#D97757` | Hex color the pane's light comes from: the glass's warm top, the title gradient, the glow, the lit guide and the focus edge. The cool end of the gradient is a fixed violet. |
 | `glow` | true | Light the rows around the file Claude is editing. |
 | `glass` | true | Draw the pane on the tinted glass slab. Off, rows sit on the terminal's own background; type colors, chips and the glow stay. |

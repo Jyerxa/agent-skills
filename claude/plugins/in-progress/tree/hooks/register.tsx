@@ -7,7 +7,7 @@ import { BLACK, CLAUDE_ACCENT, clamp, feather, glassPalette, glassRow, glowOver,
 import { fuzzyFilter } from './find'
 import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus, pathsIn } from './git'
 import { absoluteOf, ancestorsOf, baseName, cells, isAbsolute, isWindowsPath, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
-import { allDirs, allFiles, childDirs, flatten, type Row } from './tree'
+import { allDirs, allFiles, childDirs, flatten, isDirFolded, parseFolderList, type Row } from './tree'
 
 const PANE = 'tree'
 const FLUSH_EVERY = 25
@@ -53,6 +53,7 @@ const BAND_PAD_X = 1
 const rootAtom = atom({ plugin: 'tree', key: 'root' } as const, '')
 const dirsAtom = atom({ plugin: 'tree', key: 'dirs' } as const, {} as Record<string, DirListing>)
 const collapsedAtom = atom({ plugin: 'tree', key: 'collapsed' } as const, [] as string[])
+const expandedAtom = atom({ plugin: 'tree', key: 'expanded' } as const, [] as string[])
 const gitAtom = atom({ plugin: 'tree', key: 'git' } as const, EMPTY_GIT)
 const activeAtom = atom({ plugin: 'tree', key: 'active' } as const, [] as ActiveFile[])
 const trailAtom = atom({ plugin: 'tree', key: 'trail' } as const, {} as Record<string, number>)
@@ -79,6 +80,10 @@ export type Config = {
   shimmer: 'sweep' | 'pulse' | 'off'
   showIgnored: boolean
   compactFolders: boolean
+  /** folder names that start folded until the person opens them */
+  collapsedFolders: ReadonlySet<string>
+  /** folder names left out of the tree altogether */
+  hiddenFolders: ReadonlySet<string>
   accent: string
   glow: boolean
   glass: boolean
@@ -125,6 +130,8 @@ function readConfig(o: PluginOptions): Config {
     shimmer: o['shimmer'] === 'pulse' ? 'pulse' : o['shimmer'] === 'off' ? 'off' : 'sweep',
     showIgnored: o['showIgnored'] === true,
     compactFolders: o['compactFolders'] !== false,
+    collapsedFolders: typeof o['collapsedFolders'] === 'string' ? parseFolderList(o['collapsedFolders']) : new Set(['node_modules']),
+    hiddenFolders: typeof o['hiddenFolders'] === 'string' ? parseFolderList(o['hiddenFolders']) : new Set<string>(),
     accent: typeof o['accent'] === 'string' && parseHex(o['accent']) ? o['accent'] : CLAUDE_ACCENT,
     glow: o['glow'] !== false,
     glass: o['glass'] !== false,
@@ -222,10 +229,14 @@ const listDir = async ($: Dollar, root: string, rel: string): Promise<DirListing
   }
 }
 
+/** A folder that starts folded and has not been opened: its listing waits until the person opens it. */
+const isLazy = (path: string, expanded: readonly string[]): boolean => cfg.collapsedFolders.has(baseName(path)) && !expanded.includes(path)
+
 /** Lists `start` and everything beneath it (ignored folders only when `walkIgnored`), writing in batches. */
 const walk = async ($: Dollar, root: string, start: string, walkIgnored: boolean): Promise<void> => {
   const generation = walkGeneration
   const ignored = new Set((await read($, gitAtom)).ignored)
+  const expanded = await read($, expandedAtom)
   const queue: string[] = [start]
   let batch: Record<string, DirListing> = {}
   let seen = 0
@@ -241,7 +252,10 @@ const walk = async ($: Dollar, root: string, start: string, walkIgnored: boolean
     const listing = await listDir($, root, rel)
     if (!listing) continue
     batch[rel] = listing
-    for (const child of childDirs(rel, listing)) if (walkIgnored || !ignored.has(`${child}/`)) queue.push(child)
+    for (const child of childDirs(rel, listing, cfg.hiddenFolders)) {
+      if (isLazy(child, expanded)) continue
+      if (walkIgnored || !ignored.has(`${child}/`)) queue.push(child)
+    }
     seen++
     if (rel === start || seen % FLUSH_EVERY === 0) await flush()
   }
@@ -263,12 +277,15 @@ const walkAll = ($: Dollar, root: string): Promise<void> => {
 const reconcile = async ($: Dollar, root: string, extra: Iterable<string>): Promise<void> => {
   const dirs = await read($, dirsAtom)
   const git = await read($, gitAtom)
+  const expanded = await read($, expandedAtom)
   const todo = new Set<string>(extra)
   for (const [path, state] of Object.entries(git.files)) {
     const dir = parentOf(path)
     const listing = dirs[dir]
     if (!listing) {
-      for (const anc of ancestorsOf(path)) if (!dirs[anc]) todo.add(parentOf(anc))
+      const above = ancestorsOf(path)
+      if (above.some(a => a !== '' && (cfg.hiddenFolders.has(baseName(a)) || isLazy(a, expanded)))) continue
+      for (const anc of above) if (!dirs[anc]) todo.add(parentOf(anc))
       continue
     }
     const name = baseName(path)
@@ -289,7 +306,7 @@ const reconcile = async ($: Dollar, root: string, extra: Iterable<string>): Prom
     }
     await update($, dirsAtom, all => ({ ...all, [dir]: listing }))
     const known = await read($, dirsAtom)
-    for (const child of childDirs(dir, listing)) if (!known[child]) void walk($, root, child, false)
+    for (const child of childDirs(dir, listing, cfg.hiddenFolders)) if (!known[child] && !isLazy(child, expanded)) void walk($, root, child, false)
   }
 }
 
@@ -303,6 +320,7 @@ const refresh = async ($: Dollar, opts: { walk: boolean; dirs?: Iterable<string>
     await update($, dirsAtom, () => ({}))
     await update($, walkDoneAtom, () => false)
     await update($, collapsedAtom, () => [])
+    await update($, expandedAtom, () => [])
     await update($, offsetAtom, () => 0)
     shouldWalk = true
   }
@@ -394,6 +412,7 @@ const savePrefs = async ($: Dollar): Promise<void> => {
   const root = await read($, rootAtom)
   const under = viewUnder(await read($, viewAtom), await read($, previewAtom))
   await $.store.set(`collapsed:${root}`, await read($, collapsedAtom))
+  await $.store.set(`expanded:${root}`, await read($, expandedAtom))
   await $.store.set('prefs', {
     showIgnored: await read($, showIgnoredAtom),
     focusMode: await read($, focusModeAtom),
@@ -404,6 +423,8 @@ const savePrefs = async ($: Dollar): Promise<void> => {
 const loadPrefs = async ($: Dollar, root: string): Promise<void> => {
   const collapsed = await $.store.get(`collapsed:${root}`)
   await update($, collapsedAtom, () => (Array.isArray(collapsed) ? collapsed.filter((x): x is string => typeof x === 'string') : []))
+  const expanded = await $.store.get(`expanded:${root}`)
+  await update($, expandedAtom, () => (Array.isArray(expanded) ? expanded.filter((x): x is string => typeof x === 'string') : []))
   const prefs = await $.store.get('prefs')
   const p = prefs && typeof prefs === 'object' ? (prefs as { showIgnored?: unknown; focusMode?: unknown; view?: unknown }) : {}
   await update($, showIgnoredAtom, () => (typeof p.showIgnored === 'boolean' ? p.showIgnored : cfg.showIgnored))
@@ -445,10 +466,11 @@ type View = {
 
 /** Reads the session state and lays the pane's lines out, top to bottom, for the view in force; a read while drawing subscribes the pane. */
 const loadView = async ($: StateDollar, now: number): Promise<View> => {
-  const [root, dirs, collapsed, git, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, peekDiff, focused, anim] = await Promise.all([
+  const [root, dirs, collapsed, expanded, git, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, peekDiff, focused, anim] = await Promise.all([
     read($, rootAtom),
     read($, dirsAtom),
     read($, collapsedAtom),
+    read($, expandedAtom),
     read($, gitAtom),
     read($, activeAtom),
     read($, trailAtom),
@@ -480,7 +502,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
   }
 
   if (filter !== null) {
-    for (const m of fuzzyFilter(filter, allFiles(dirs), FILTER_MAX)) lines.push({ key: `f:${m.path}`, kind: 'match', path: m.path, indices: m.indices })
+    for (const m of fuzzyFilter(filter, allFiles(dirs, cfg.hiddenFolders), FILTER_MAX)) lines.push({ key: `f:${m.path}`, kind: 'match', path: m.path, indices: m.indices })
     if (lines.length === 0) lines.push({ key: 'note', kind: 'note', text: 'no match' })
     return { ...out, lines }
   }
@@ -509,6 +531,9 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
   }
   const { rows, isFolded } = flatten(dirs, {
     collapsed: new Set(collapsed),
+    expanded: new Set(expanded),
+    foldByDefault: cfg.collapsedFolders,
+    hidden: cfg.hiddenFolders,
     showIgnored,
     ignored: new Set(git.ignored),
     compactFolders: cfg.compactFolders,
@@ -541,13 +566,30 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
 
 // ---------- actions ----------
 
-const reveal = async ($: Dollar, rel: string): Promise<void> => {
+/**
+ * Unfolds the folders above `rel` and scrolls to it. A folder that starts folded (`node_modules`) is
+ * opened only when the person asked (`unfoldDefault`), not when Claude's work merely passes through it.
+ */
+const reveal = async ($: Dollar, rel: string, unfoldDefault: boolean): Promise<void> => {
   const above = new Set(ancestorsOf(rel).filter(a => a !== ''))
   const collapsed = await read($, collapsedAtom)
+  let isChanged = false
   if (collapsed.some(c => above.has(c))) {
     await update($, collapsedAtom, c => c.filter(p => !above.has(p)))
-    await savePrefs($)
+    isChanged = true
   }
+  if (unfoldDefault) {
+    const expanded = await read($, expandedAtom)
+    const opening = [...above].filter(a => isLazy(a, expanded))
+    if (opening.length > 0) {
+      await update($, expandedAtom, e => [...e, ...opening])
+      isChanged = true
+      const dirs = await read($, dirsAtom)
+      const unlisted = ancestorsOf(rel).find(a => a !== '' && !dirs[a])
+      if (unlisted !== undefined) void walk($, await read($, rootAtom), unlisted, true)
+    }
+  }
+  if (isChanged) await savePrefs($)
   const now = await $.clock.now()
   if (now - lastPersonScrollAt < SCROLL_GRACE_MS) return
   const { lines } = await loadView($, now)
@@ -570,7 +612,7 @@ const jumpTo = async ($: Dollar, path: string): Promise<void> => {
   await update($, viewAtom, () => 'tree')
   await update($, filterAtom, () => null)
   lastPersonScrollAt = 0
-  await reveal($, path)
+  await reveal($, path, true)
 }
 
 const mention = async ($: Dollar, rel: string): Promise<void> => {
@@ -593,8 +635,7 @@ const finishAnim = async ($: Dollar): Promise<void> => {
   const anim = await read($, animAtom)
   if (!anim) return
   if (anim.kind === 'fold') {
-    await update($, collapsedAtom, c => (c.includes(anim.path) ? c : [...c, anim.path]))
-    await savePrefs($)
+    await foldDir($, anim.path)
   }
   await update($, animAtom, () => null)
 }
@@ -624,23 +665,38 @@ const startAnim = async ($: Dollar, kind: FoldAnim['kind'], path: string, count:
   armAnim($)
 }
 
+/** Folds a folder: the person's fold, which also ends any earlier opening of a folder that starts folded. */
+const foldDir = async ($: Dollar, path: string): Promise<void> => {
+  await update($, collapsedAtom, c => (c.includes(path) ? c : [...c, path]))
+  await update($, expandedAtom, e => e.filter(p => p !== path))
+  await savePrefs($)
+}
+
+/** Opens a folder, remembering the opening when the folder starts folded. */
+const unfoldDir = async ($: Dollar, path: string): Promise<void> => {
+  await update($, collapsedAtom, c => c.filter(p => p !== path))
+  if (cfg.collapsedFolders.has(baseName(path))) await update($, expandedAtom, e => (e.includes(path) ? e : [...e, path]))
+  await savePrefs($)
+}
+
 /** A click on a folder: unfold it with its rows rippling in, or ripple them out and then fold it. */
 const toggleDir = async ($: Dollar, path: string): Promise<void> => {
   await finishAnim($)
-  const collapsed = await read($, collapsedAtom)
-  const isCollapsed = collapsed.includes(path)
+  const isCollapsed = isDirFolded(path, {
+    collapsed: new Set(await read($, collapsedAtom)),
+    expanded: new Set(await read($, expandedAtom)),
+    foldByDefault: cfg.collapsedFolders,
+  })
   if (isCollapsed) {
     if (!(await read($, dirsAtom))[path]) void walk($, await read($, rootAtom), path, true)
-    await update($, collapsedAtom, c => c.filter(p => p !== path))
-    await savePrefs($)
+    await unfoldDir($, path)
     const count = cfg.animate ? await countDescendants($, path) : 0
     if (count > 0) await startAnim($, 'unfold', path, count)
     return
   }
   const count = cfg.animate ? await countDescendants($, path) : 0
   if (count === 0) {
-    await update($, collapsedAtom, c => [...c, path])
-    await savePrefs($)
+    await foldDir($, path)
     return
   }
   await startAnim($, 'fold', path, count)
@@ -654,12 +710,15 @@ const toggleIgnored = async ($: Dollar): Promise<void> => {
 const collapseAll = async ($: Dollar): Promise<void> => {
   const dirs = await read($, dirsAtom)
   await update($, collapsedAtom, () => allDirs(dirs))
+  await update($, expandedAtom, () => [])
   await update($, offsetAtom, () => 0)
   await savePrefs($)
 }
 
+/** Opens every folder the person folded; folders that start folded go back to folded. */
 const expandAll = async ($: Dollar): Promise<void> => {
   await update($, collapsedAtom, () => [])
+  await update($, expandedAtom, () => [])
   await savePrefs($)
 }
 
@@ -1778,7 +1837,7 @@ export const register: Register = (on, options) => {
         if (!arg) return { text: 'tree: reveal needs a path.' }
         const rel = relativeTo(await read($, rootAtom), arg)
         if (rel === null) return { text: `tree: ${arg} is outside the project.` }
-        await reveal($, rel)
+        await reveal($, rel, true)
         return { text: `tree: revealed ${rel}.` }
       }
       case 'mention': {
@@ -1815,7 +1874,7 @@ export const register: Register = (on, options) => {
     const rel = relativeTo(root, raw)
     const path = rel ?? toPosix(raw)
     await update($, activeAtom, list => [...list, { path, toolUseId: e.tool_use_id, tool: String(e.tool), isRead }])
-    if (rel !== null && cfg.followClaude) void reveal($, rel)
+    if (rel !== null && cfg.followClaude) void reveal($, rel, false)
     armShimmer($)
     try {
       return await next(e)

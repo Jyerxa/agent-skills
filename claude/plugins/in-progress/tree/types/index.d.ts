@@ -70,6 +70,8 @@ declare module 'claude-code' {
       root: string
       dirs: Record<string, DirListing>
       collapsed: string[]
+      /** folders that start folded (`collapsedFolders`) which the person has opened */
+      expanded: string[]
       git: GitSnapshot
       active: ActiveFile[]
       trail: Record<string, number>

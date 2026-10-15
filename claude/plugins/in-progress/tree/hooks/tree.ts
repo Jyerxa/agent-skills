@@ -18,6 +18,12 @@ export type Row = {
 
 export type FlattenOptions = {
   collapsed: ReadonlySet<string>
+  /** folders that start folded which the person has opened */
+  expanded: ReadonlySet<string>
+  /** folder names that start folded (`node_modules`) */
+  foldByDefault: ReadonlySet<string>
+  /** folder names left out of the tree altogether, as `.git` always is */
+  hidden: ReadonlySet<string>
   showIgnored: boolean
   ignored: ReadonlySet<string>
   compactFolders: boolean
@@ -29,11 +35,24 @@ export type FlattenOptions = {
   keep?: (path: string, kind: 'dir' | 'file') => boolean
 }
 
+/** A comma-separated list of folder names: trimmed, slashes stripped, empties dropped. */
+export const parseFolderList = (text: string): Set<string> =>
+  new Set(text.split(',').map(x => x.trim().replace(/^\/+|\/+$/g, '')).filter(x => x !== ''))
+
+/** Whether a folder of this name is left out of the tree: `.git` always, plus the configured names. */
+export const isHiddenName = (name: string, hidden: ReadonlySet<string>): boolean => name === '.git' || hidden.has(name)
+
+export type FoldRules = Pick<FlattenOptions, 'collapsed' | 'expanded' | 'foldByDefault'>
+
+/** Whether a folder shows folded: the person folded it, or it starts folded and they have not opened it. */
+export const isDirFolded = (path: string, r: FoldRules): boolean =>
+  r.collapsed.has(path) || (r.foldByDefault.has(baseName(path)) && !r.expanded.has(path))
+
 /** Every listed file, tree-relative, sorted: what the filter searches. */
-export const allFiles = (dirs: Readonly<Record<string, DirListing>>): string[] => {
+export const allFiles = (dirs: Readonly<Record<string, DirListing>>, hidden: ReadonlySet<string> = new Set()): string[] => {
   const out: string[] = []
   for (const [dir, listing] of Object.entries(dirs)) {
-    if (dir === '.git' || dir.startsWith('.git/') || dir.includes('/.git/')) continue
+    if (dir.split('/').some(part => isHiddenName(part, hidden))) continue
     for (const en of listing.entries) if (en.kind === 'file') out.push(join(dir, en.name))
   }
   return out.sort()
@@ -76,7 +95,7 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
         .map(name => ({ name, kind: 'file' as const }))
       const missing = new Set(extra.map(e => e.name))
       for (const en of sortEntries([...listing.entries, ...extra])) {
-        if (en.name === '.git') continue
+        if (en.name === '.git' || (en.kind === 'dir' && o.hidden.has(en.name))) continue
         let path = join(dir, en.name)
         const isIgnored = inheritedIgnored || o.ignored.has(en.kind === 'dir' ? `${path}/` : path)
         if (isIgnored && !o.showIgnored) continue
@@ -85,11 +104,11 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
           let name = en.name
           if (o.compactFolders) {
             for (;;) {
-              if (o.collapsed.has(path)) break
+              if (isDirFolded(path, o)) break
               const child = dirs[path]
               if (!child || child.entries.length !== 1) break
               const only = child.entries[0]
-              if (!only || only.kind !== 'dir' || only.name === '.git') break
+              if (!only || only.kind !== 'dir' || isHiddenName(only.name, o.hidden)) break
               const childPath = join(path, only.name)
               if (!o.showIgnored && o.ignored.has(`${childPath}/`)) break
               if (deletedByDir.has(path)) break
@@ -98,7 +117,7 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
             }
           }
           maxDepth = Math.max(maxDepth, depth)
-          const isOpen = !o.collapsed.has(path) && depth < foldDepth
+          const isOpen = !isDirFolded(path, o) && depth < foldDepth
           rows.push({ key: `d:${path}`, path, name, kind: 'dir', depth, isOpen, count: o.dirCounts[path] ?? 0, isIgnored, isMissing: false })
           if (isOpen) visit(path, depth + 1, isIgnored)
         } else {
@@ -119,9 +138,9 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
   return { rows: build(1), isFolded: true }
 }
 
-/** The folders directly inside `dir`, tree-relative, `.git` left out: what a walk goes on into. */
-export const childDirs = (dir: string, listing: DirListing): string[] =>
-  listing.entries.filter(en => en.kind === 'dir' && en.name !== '.git').map(en => join(dir, en.name))
+/** The folders directly inside `dir`, tree-relative, hidden ones left out: what a walk goes on into. */
+export const childDirs = (dir: string, listing: DirListing, hidden: ReadonlySet<string> = new Set()): string[] =>
+  listing.entries.filter(en => en.kind === 'dir' && !isHiddenName(en.name, hidden)).map(en => join(dir, en.name))
 
 /** Every listed folder path except the root: what "collapse all" folds. */
 export const allDirs = (dirs: Readonly<Record<string, DirListing>>): string[] => Object.keys(dirs).filter(d => d !== '')

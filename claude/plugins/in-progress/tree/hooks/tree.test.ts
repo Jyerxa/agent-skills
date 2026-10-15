@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { DirListing } from '../types'
 import { ancestorsOf, relativeTo, shortenPath, truncateMiddle, truncateStart } from './paths'
-import { allDirs, allFiles, flatten, type FlattenOptions } from './tree'
+import { allDirs, allFiles, childDirs, flatten, isDirFolded, parseFolderList, type FlattenOptions } from './tree'
 
 const d = (names: string[]): DirListing => ({
   entries: names.map(n => (n.endsWith('/') ? { name: n.slice(0, -1), kind: 'dir' as const } : { name: n, kind: 'file' as const })),
@@ -24,6 +24,9 @@ const REPO: Record<string, DirListing> = {
 
 const base = (over: Partial<FlattenOptions> = {}): FlattenOptions => ({
   collapsed: new Set(),
+  expanded: new Set(),
+  foldByDefault: new Set(),
+  hidden: new Set(),
   showIgnored: false,
   ignored: new Set(),
   compactFolders: true,
@@ -157,4 +160,73 @@ test('truncation keeps both ends, or the file name', () => {
   expect(truncateMiddle('short.md', 22)).toBe('short.md')
   expect(truncateMiddle('abc', 1)).toBe('…')
   expect(truncateStart('skills/pattern-design/SKILL.md', 12)).toBe('…gn/SKILL.md')
+})
+
+const MODULES: Record<string, DirListing> = {
+  '': d(['src/', 'node_modules/', 'README.md']),
+  src: d(['a.ts']),
+  node_modules: d(['left-pad/', 'is-odd/']),
+  'node_modules/left-pad': d(['index.js']),
+  'node_modules/is-odd': d(['index.js']),
+}
+
+const show = (rows: { depth: number; isOpen: boolean; kind: string; name: string }[]) =>
+  rows.map(r => `${'  '.repeat(r.depth)}${r.kind === 'dir' ? (r.isOpen ? '▾ ' : '▸ ') : ''}${r.name}`)
+
+test('a folder that starts folded shows folded, with its change count, and its contents are not drawn', () => {
+  const { rows } = flatten(MODULES, base({ foldByDefault: new Set(['node_modules']), dirCounts: { node_modules: 2 } }))
+  expect(show(rows)).toEqual(['▸ node_modules', '▾ src', '  a.ts', 'README.md'])
+  expect(rows.find(r => r.name === 'node_modules')?.count).toBe(2)
+})
+
+test('opening a folder that starts folded draws it; an explicit fold still wins', () => {
+  const fold = new Set(['node_modules'])
+  expect(show(flatten(MODULES, base({ foldByDefault: fold, expanded: new Set(['node_modules']) })).rows)).toEqual([
+    '▾ node_modules',
+    '  ▾ is-odd',
+    '    index.js',
+    '  ▾ left-pad',
+    '    index.js',
+    '▾ src',
+    '  a.ts',
+    'README.md',
+  ])
+  const rows = flatten(MODULES, base({ foldByDefault: fold, expanded: new Set(['node_modules']), collapsed: new Set(['node_modules']) })).rows
+  expect(rows.find(r => r.name === 'node_modules')?.isOpen).toBe(false)
+})
+
+test('compaction does not run through a folder that starts folded', () => {
+  const dirs: Record<string, DirListing> = { '': d(['node_modules/']), node_modules: d(['only/']), 'node_modules/only': d(['x.js']) }
+  expect(show(flatten(dirs, base({ foldByDefault: new Set(['node_modules']) })).rows)).toEqual(['▸ node_modules'])
+  const open = flatten(dirs, base({ foldByDefault: new Set(['node_modules']), expanded: new Set(['node_modules']) })).rows
+  expect(show(open)).toEqual(['▾ node_modules/only', '  x.js'])
+})
+
+test('a folder that starts folded is matched by name at any depth', () => {
+  const r = { collapsed: new Set<string>(), expanded: new Set<string>(), foldByDefault: new Set(['node_modules']) }
+  expect(isDirFolded('node_modules', r)).toBe(true)
+  expect(isDirFolded('packages/app/node_modules', r)).toBe(true)
+  expect(isDirFolded('packages/app', r)).toBe(false)
+  expect(isDirFolded('packages/app/node_modules', { ...r, expanded: new Set(['packages/app/node_modules']) })).toBe(false)
+})
+
+test('hidden folders get no row, are not entered by compaction, not searched, and not walked', () => {
+  const hidden = new Set(['node_modules', 'src'])
+  expect(show(flatten(MODULES, base({ hidden })).rows)).toEqual(['README.md'])
+  const dirs: Record<string, DirListing> = { '': d(['a/']), a: d(['dist/']), 'a/dist': d(['x.js']) }
+  expect(show(flatten(dirs, base({ hidden: new Set(['dist']) })).rows)).toEqual(['▾ a'])
+  expect(allFiles(MODULES, hidden)).toEqual(['README.md'])
+  expect(allFiles(MODULES).length).toBe(4)
+  expect(childDirs('', MODULES[''] as DirListing, hidden)).toEqual([])
+  expect(childDirs('', MODULES[''] as DirListing)).toEqual(['src', 'node_modules'])
+})
+
+test('a hidden name hides folders only: a file of that name is still a file', () => {
+  const dirs: Record<string, DirListing> = { '': d(['dist', 'README.md']) }
+  expect(show(flatten(dirs, base({ hidden: new Set(['dist']) })).rows)).toEqual(['dist', 'README.md'])
+})
+
+test('parseFolderList trims, strips slashes and drops empties', () => {
+  expect([...parseFolderList(' node_modules, dist/ ,, /vendor/ ')]).toEqual(['node_modules', 'dist', 'vendor'])
+  expect(parseFolderList('').size).toBe(0)
 })
