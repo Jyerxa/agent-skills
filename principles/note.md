@@ -262,6 +262,8 @@ PR #26 review round 1 (user notes):
 PR #26 review round 2 (user notes):
 - Pure core, thin shell extracted from Validate at the edge (modules.md) into an always-rule in SKILL.md ("Pure logic, thin wiring"), prefixed "Whenever possible". Partly answers the open #12 split: the pure-core half is now its own always-rule; the parse-at-the-edge half stays in modules.md.
 
+- Separate commands from queries: trigger changed from "a function named like a read changes state" (describes the violation, which an agent will not recognize in its own code) to the design activity: "designing a class, interface, or API whose operations read or change state".
+
 Smoke tests (headless Claude Code, skill copied to .claude/skills): retry + parallel workers task loaded only state-changes.md; a bakery-name question loaded nothing; a unit-test task loaded only tests.md and applied "skip these tests". `npx skills add . --list` finds the skill only under `skills/`, so it must move to `skills/in-progress/coding-principles` to be installable (verified in a scratch copy).
 
 ## Open questions

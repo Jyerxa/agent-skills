@@ -13,7 +13,7 @@ Use when: an entity has a lifecycle (draft, active, canceled).
 ## Separate commands from queries
 Make a function either change state or return data. The exception is an operation that must return what it atomically changed.
 
-Use when: a function named like a read changes state.
+Use when: designing a class, interface, or API whose operations read or change state.
 
 ## Make operations idempotent
 Make an operation safe to run twice, or after a crash partway through, when it retries, restarts, or runs unattended. Use upserts, deterministic IDs, checks inside the transaction, and write-to-temp then rename.
