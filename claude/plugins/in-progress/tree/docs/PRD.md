@@ -58,7 +58,7 @@ Identity: plugin id `tree`, pane id `tree`, slash command `/tree`, folder `claud
 - F6. On open the plugin walks the whole working directory and shows it fully expanded: every subfolder and every file. The walk runs in the background, root first, so the pane paints at once and deeper folders fill in as it completes. `.git` is always hidden. Entries matched by `.gitignore` are hidden by default; config `showIgnored` or the `h` hotkey shows them dim.
 - F7. Folders show `▾` open / `▸` closed; files show name only, indented 2 cells per level under the folder glyph.
 - F8. Compact folders: a chain of single-child folders collapses onto one row (`src/main/java`). Config `compactFolders`, default on.
-- F9. Clicking a folder collapses or expands it. `c` collapses all, `e` expands all. Collapsed folders persist per repository root across sessions; everything the person has not collapsed is shown expanded.
+- F9. Clicking a folder collapses or expands it. `c` collapses all, `e` expands all. Collapsed folders persist per repository root across sessions; everything the person has not collapsed is shown expanded, except folders named in `collapsedFolders` (default `node_modules`, matched by name at any depth), which start folded until the person opens them; that opening persists too (`expanded`). Their contents are not listed until first opened. `e` expands everything the person folded and leaves those folders folded; Claude's activity inside one does not open it, an explicit reveal does (issue #24).
 - F10. Safeguard for very large trees only: when the full listing would exceed 2,000 rows, the deepest folders start collapsed with a dim count (`▸ node_modules  1,204`) and expand on click. Nothing is hidden, only folded.
 
 ### 4.3 Git status
@@ -134,6 +134,8 @@ Configuration (`userConfig` in `plugin.json`; each field is a `/config` row):
 | `shimmer` | string: `sweep`, `pulse`, `off` | `sweep` | Animation style. |
 | `showIgnored` | boolean | false | Show gitignored entries and dotfiles, dim. |
 | `compactFolders` | boolean | true | Collapse single-child folder chains. |
+| `collapsedFolders` | string (comma-separated names) | `node_modules` | Folders drawn folded until the person opens them (F9). Empty folds nothing. |
+| `hiddenFolders` | string (comma-separated names) | empty | Folders left out of the tree, the walk and the filter, as `.git` is. The Changes view still lists their changes. Wins over `collapsedFolders`. |
 | `accent` | string (hex) | `#D97757` | Color of the glow, the lit guide and the focus edge. |
 | `glow` | boolean | true | Tint the rows around the file Claude is editing. |
 | `glass` | boolean | true | Draw the pane on the tinted glass slab (§5.6). Off, rows sit on the terminal's own background. |
@@ -463,6 +465,7 @@ v1 is M0 through M4. Subagent awareness moved to "Later". M5 is keyboard navigat
 | 2026-10-10 | M5, keyboard and preview. ↑/↓ and `j`/`k` move a row cursor that is the engine's focus ring. Space cannot be bound (hotkeys are one letter or digit), so Enter alone folds and unfolds; no extra `l`/`h` keys. |
 | 2026-10-10 | Click and Enter are one press to the engine, so both open the preview on a file. Mention moves to `m`, in the tree and as a key in the preview. This replaces the v1 decision that one click mentions. |
 | 2026-10-10 | The preview is wide, so it feels like plan mode. Planned as a second pane, but the engine refuses a new pane the keyboard while the person holds the tree. Built first as the tree pane's own view with the dock widened, but the dock ignored the width (seen live). By the user's ask it now draws over the main window: the band above the prompt, as wide as the transcript, driven from the tree pane (`previewIn: band`, default; `pane` keeps the in-pane view). `q` closes it, since Esc belongs to the engine. |
+| 2026-10-14 | Issue #24: `node_modules` starts folded, and a hide list joins it. Both are name lists in config (`collapsedFolders`, `hiddenFolders`), not hardcoded. Collapse is separate from hide: a folded folder stays one click from open; a hidden one is gone from the tree, walk and find. Folded-by-default folders are not walked until opened. Auto-follow does not open them, so Claude reading `node_modules/x` does not undo the setting. |
 | 2026-10-10 | Open in editor comes back as the keyboard-only `o` with a configurable `editor` command (default `code -g {path}:{line}`). The hover button stays skipped. GUI editors only. |
 
 ## Appendix A. Technical design

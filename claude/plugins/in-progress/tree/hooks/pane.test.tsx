@@ -15,6 +15,18 @@ const FILES: Record<string, Entry[]> = {
   '/repo/skills/a': [{ name: 'SKILL.md', kind: 'file' }],
 }
 
+/** The repo with a node_modules of two packages, to see what starts folded. */
+const WITH_MODULES: Record<string, Entry[]> = {
+  ...FILES,
+  '/repo': [...(FILES['/repo'] ?? []), { name: 'node_modules', kind: 'dir' }],
+  '/repo/node_modules': [
+    { name: 'left-pad', kind: 'dir' },
+    { name: 'is-odd', kind: 'dir' },
+  ],
+  '/repo/node_modules/left-pad': [{ name: 'index.js', kind: 'file' }],
+  '/repo/node_modules/is-odd': [{ name: 'index.js', kind: 'file' }],
+}
+
 const STATUS = ['# branch.oid 1234567', '# branch.head main', '1 .M N... 100644 100644 100644 a b README.md', ''].join('\0')
 const NUMSTAT = '3\t1\tREADME.md\0'
 const DIFF = ['diff --git a/README.md b/README.md', '--- a/README.md', '+++ b/README.md', '@@ -1 +1 @@', '-old line', '+new line', ''].join('\n')
@@ -31,7 +43,7 @@ const PANE_PROPS = {
 type Write = { key: string; value: unknown }
 
 /** What a test reads back from beneath the plugin, and what it hands it: the text any file reads as. */
-type Spy = { text?: string; argv?: string[][]; opens?: { columns?: number }[] }
+type Spy = { text?: string; argv?: string[][]; opens?: { columns?: number }[]; files?: Record<string, Entry[]> }
 
 /** The world beneath the plugin: a clock and store in memory, a fake repo on disk, git answered from fixtures. */
 const world = (on: On, filled: string[], writes: Write[], stored: Record<string, unknown>, spy: Spy = {}) => {
@@ -74,7 +86,7 @@ const world = (on: On, filled: string[], writes: Write[], stored: Record<string,
   on('env.get', () => ({ value: undefined }))
   // the engine hands the op an absolute path in the host's spelling (C:\repo on Windows); key the fixture by the POSIX form
   const posix = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
-  on('fs.list', ($, e) => ({ value: (FILES[posix(e.path)] ?? []).map(x => ({ ...x, size: 0, mtimeMs: 0, isLink: false })) }))
+  on('fs.list', ($, e) => ({ value: ((spy.files ?? FILES)[posix(e.path)] ?? []).map(x => ({ ...x, size: 0, mtimeMs: 0, isLink: false })) }))
   on('fs.stat', () => ({ value: { kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false } }))
   on('fs.read', () => ({ value: spy.text ?? 'one\ntwo\n' }))
   on('process.run', ($, e) => {
@@ -515,4 +527,72 @@ test('/tree preview <path> opens the preview from the prompt', async ($, on) => 
   const band = await mountBand($)
   expect((await band.find({ type: 'Code' }))?.props['path']).toBe('skills/a/SKILL.md')
   await band.unmount()
+})
+
+test('node_modules starts folded; a press opens it and the opening is remembered, another folds it, and e puts it back', async ($, on) => {
+  const writes: Write[] = []
+  const stored: Record<string, unknown> = {}
+  const clock = world(on, [], writes, stored, { files: WITH_MODULES })
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'd:node_modules' }), 'the folder is listed').toBeDefined()
+  expect(await ui.find({ key: 'd:node_modules/left-pad' }), 'its contents are not').toBeUndefined()
+  expect(lastWrite(writes, 'dirs') as Record<string, unknown>, 'and not even walked').not.toHaveProperty('node_modules')
+
+  await ui.press({ key: 'd:node_modules' })
+  await clock.advance(200)
+  expect(await ui.find({ key: 'd:node_modules/left-pad' }), 'opened').toBeDefined()
+  expect(lastWrite(writes, 'expanded')).toEqual(['node_modules'])
+  expect(stored[`expanded:${ROOT}`], 'remembered in the store').toEqual(['node_modules'])
+  expect(lastWrite(writes, 'collapsed')).toEqual([])
+
+  await ui.press({ key: 'd:node_modules' })
+  await clock.advance(200)
+  expect(await ui.find({ key: 'd:node_modules/left-pad' }), 'folded again').toBeUndefined()
+  expect(lastWrite(writes, 'collapsed')).toEqual(['node_modules'])
+  expect(lastWrite(writes, 'expanded')).toEqual([])
+
+  await ui.press({ key: 'd:node_modules' })
+  await clock.advance(200)
+  await ui.press({ key: 'act:expand' })
+  expect(lastWrite(writes, 'expanded'), 'unfold all leaves folders that start folded folded').toEqual([])
+  expect(await ui.find({ key: 'd:node_modules/left-pad' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('Claude working inside node_modules does not open it, but /tree reveal does', async ($, on) => {
+  const writes: Write[] = []
+  const clock = world(on, [], writes, {}, { files: WITH_MODULES })
+  on('tool.call', { tool: 'Read' }, () => ({ deny: 'not run in a test' }))
+  await start($)
+  const ui = await mountTree($)
+  await $.tool.call({ tool: 'Read', file_path: '/repo/node_modules/left-pad/index.js' })
+  await clock.advance(200)
+  expect(lastWrite(writes, 'expanded') ?? [], 'followClaude leaves it folded').toEqual([])
+  expect(await ui.find({ key: 'f:node_modules/left-pad/index.js' })).toBeUndefined()
+
+  await $.command.run({ command: 'tree', args: 'reveal node_modules/left-pad/index.js', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } })
+  await clock.advance(200)
+  expect(lastWrite(writes, 'expanded'), 'an explicit reveal opens it').toEqual(['node_modules'])
+  expect(await ui.find({ key: 'f:node_modules/left-pad/index.js' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('collapsedFolders is configurable: an empty list folds nothing', { options: { collapsedFolders: '' } }, async ($, on) => {
+  world(on, [], [], {}, { files: WITH_MODULES })
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'd:node_modules/left-pad' }), 'open like any folder').toBeDefined()
+  await ui.unmount()
+})
+
+test('hiddenFolders leaves a folder out of the tree altogether', { options: { hiddenFolders: 'skills, node_modules' } }, async ($, on) => {
+  const spy: Spy = { files: WITH_MODULES, argv: [] }
+  world(on, [], [], {}, spy)
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'f:README.md' })).toBeDefined()
+  expect(await ui.find({ key: 'd:skills/a' }), 'no row for a hidden folder').toBeUndefined()
+  expect(await ui.find({ key: 'd:node_modules' }), 'hidden beats folded by default').toBeUndefined()
+  await ui.unmount()
 })

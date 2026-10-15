@@ -55,6 +55,18 @@
       "description": "Draw a chain of single-child folders on one row (src/main/java).",
       "default": true
     },
+    "collapsedFolders": {
+      "type": "string",
+      "title": "Folders folded at first",
+      "description": "Comma-separated folder names, matched at any depth, drawn folded until you open them (node_modules). Empty folds nothing.",
+      "default": "node_modules"
+    },
+    "hiddenFolders": {
+      "type": "string",
+      "title": "Hidden folders",
+      "description": "Comma-separated folder names, matched at any depth, left out of the tree and its find (dist, .venv). The Changes view still lists their changes.",
+      "default": ""
+    },
     "accent": {
       "type": "string",
       "title": "Accent color",
