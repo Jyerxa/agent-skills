@@ -11,7 +11,7 @@ Cursor all load it the same way. There is nothing to configure.
 | Layer | What loads | When | Cost |
 | --- | --- | --- | --- |
 | 1 | The skill `description` | Always | about 45 tokens |
-| 2 | `SKILL.md` body: six always-rules and a topic index | The agent is writing, changing, debugging, or designing code | about 440 tokens |
+| 2 | `SKILL.md` body: seven always-rules and a topic index | The agent is writing, changing, debugging, or designing code | about 470 tokens |
 | 3 | One or two files from `references/` | The work matches a line in the index | 260 to 545 tokens each |
 
 A conversation that is not about code loads layer 1 only. A typical coding

@@ -266,6 +266,8 @@ PR #26 review round 2 (user notes):
 
 - Trigger pass across all topic files. Rule: a trigger names the activity the agent is doing (designing, writing, editing), not the defect the principle prevents, because an agent will not recognize its own violation. Rewrote 10 triggers: Model the domain, Replace primitives, Keep invariants in one place, Tell do not ask, Keep necessary complexity in one place, Leave it cleaner, Restructure first, Name for intent, Let tools enforce style, Verify what you recall. Left event triggers an agent can observe (tempted to ask, repeated attempts failed, a change makes a failure disappear, about to add a mock).
 
+- Hygiene made always-on like simplicity: new "Leave it clean" always-rule in SKILL.md that sends the agent to `hygiene.md` on every change; removed from the topic index. Finish the migration trigger shortened to "replacing an API" (dropped "you were asked to replace").
+
 Smoke tests (headless Claude Code, skill copied to .claude/skills): retry + parallel workers task loaded only state-changes.md; a bakery-name question loaded nothing; a unit-test task loaded only tests.md and applied "skip these tests". `npx skills add . --list` finds the skill only under `skills/`, so it must move to `skills/in-progress/coding-principles` to be installable (verified in a scratch copy).
 
 ## Open questions

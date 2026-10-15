@@ -13,7 +13,7 @@ Use when: adding a feature or fix to existing code.
 ## Finish the migration
 Aim a refactor at the target design, not an intermediate compatibility state. When you replace an internal API, migrate every caller you can find, delete the old API, and update the tests that call it. If a caller is outside the repo or unknown, keep the old API marked deprecated and report it.
 
-Use when: replacing an API you were asked to replace.
+Use when: replacing an API.
 
 ## Name for intent
 Name things with the domain's terms, and give one concept one name. Names say what a thing is or does. Replace magic numbers with named constants.

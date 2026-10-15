@@ -17,6 +17,8 @@ Apply to every code change.
 
 **Pure logic, thin wiring.** Whenever possible, keep business logic in pure functions and framework wiring thin, so logic tests without the framework.
 
+**Leave it clean.** Hygiene applies to every change. Before you change code, read `hygiene.md`. Fix small messes in the code you edit, name things for intent, and leave no scratch behind.
+
 **Reuse first.** Before writing a helper or adding a dependency, search the codebase, the standard library, and the dependencies already installed.
 
 **Working is not done.** Make it work, then make it right (simple, clear, correct), then make it fast only if measured. Passing once is the first stage.
@@ -30,7 +32,6 @@ Read the files that match the work, in `references/`.
 - Designing a module, interface, or API: `contracts.md`, `modules.md`
 - Data models, types, domain rules: `domain-modeling.md`
 - Changing state, retries, concurrency, parallel agents: `state-changes.md`
-- Cleanup, refactors, migrations, naming, comments: `hygiene.md`
 - Writing, changing, or deleting tests: `tests.md`
 - Declaring work done, or reporting a measurement: `verification.md`
 - Debugging, or stuck after repeated failed attempts: `debugging.md`
