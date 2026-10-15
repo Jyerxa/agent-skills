@@ -15,6 +15,8 @@ Apply to every code change.
 
 **Simplest design.** Simplicity governs every change, not only refactors. Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Ask what the change lets you delete or rewrite before you add to it. Choose the design with the least code and the least for a reader to hold in mind.
 
+**Pure logic, thin wiring.** Whenever possible, keep business logic in pure functions and the framework wiring thin, so logic tests without the framework.
+
 **Reuse first.** Before writing a helper or adding a dependency, search the codebase, the standard library, and the dependencies already installed.
 
 **Working is not done.** Make it work, then make it right (simple, clear, correct), then make it fast only if measured. Passing once is the first stage.

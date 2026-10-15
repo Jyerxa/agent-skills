@@ -16,9 +16,9 @@ Tell an object what to do. Do not read its data, decide outside, and write the r
 Use when: logic outside an object manipulates the object's fields.
 
 ## Validate at the edge, trust the inside
-Parse and validate input once at the boundary (CLI, config, network, external APIs) into typed domain values. Inside, trust those types and do not re-check. Keep business logic in pure functions and the framework wiring thin, so logic tests without the framework. Trust holds only where types enforce the guarantee.
+Parse and validate input once at the boundary (CLI, config, network, external APIs) into typed domain values. Inside, trust those types and do not re-check. Trust holds only where types enforce the guarantee.
 
-Use when: handling external input, adding null checks deep in a call chain, or putting logic in handlers and framework glue.
+Use when: handling external input, or adding null checks deep in a call chain.
 
 ## Group by one reason to change
 Group code by one body of domain knowledge or one reason to change. Do not group by execution order (load, validate, transform, save), because phase-named modules repeat the same rules in every step. Do not make one class per method either.
