@@ -28,7 +28,7 @@ Use when: deleting, rewriting, or refactoring at scale.
 ## Verify what you recall
 Check library and API signatures and behavior against docs or source, not memory.
 
-Use when: calling an API you have not read in this session.
+Use when: calling an API, library function, or command.
 
 ## Delegate with a brief
 A subagent knows only what you tell it. State the goal, the constraints, what you ruled out, and where to look. Treat its report as a claim to check.

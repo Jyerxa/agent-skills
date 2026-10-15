@@ -33,4 +33,4 @@ Use when: duplicating a rule, or merging similar code.
 ## Keep necessary complexity in one place
 When complexity cannot be removed, put it inside the module that owns it so callers stay simple. Do not push it onto every caller through options, ordering rules, or setup steps.
 
-Use when: an interface makes callers know internal details, call order, or flags.
+Use when: designing an interface or module that other code will call.

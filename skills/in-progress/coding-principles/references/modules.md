@@ -13,7 +13,7 @@ Use when: choosing what a module exposes.
 ## Tell, do not ask
 Tell an object what to do. Do not read its data, decide outside, and write the result back. Prefer `account.withdraw(n)` to reading the balance and calling `setBalance`.
 
-Use when: logic outside an object manipulates the object's fields.
+Use when: designing an object's operations, or writing code that uses an object's data.
 
 ## Validate at the edge, trust the inside
 Parse and validate input once at the boundary (CLI, config, network, external APIs) into typed domain values. Inside, trust those types and do not re-check. Trust holds only where types enforce the guarantee.

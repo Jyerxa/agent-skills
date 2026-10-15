@@ -50,7 +50,7 @@ principles/note.md      review log and open decisions
 ## Writing a principle
 
 Each entry in a topic file is a `##` heading, one instruction in one to four
-sentences, and a `Use when:` line. Keep it under 90 words. Write plain
+sentences, and a `Use when:` line. Write the `Use when:` line as the activity the agent is doing (designing, writing, editing), not the defect the principle prevents. Keep it under 90 words. Write plain
 sentences in active voice. No em dashes, no hedging, no metaphors.
 
 Run `uv run principles/in-progress/check.py` after any edit. It fails when an
