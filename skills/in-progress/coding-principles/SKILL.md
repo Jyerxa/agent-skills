@@ -13,6 +13,8 @@ Apply to every code change.
 
 **Smallest change.** Make the smallest change that fully solves the problem. Where removing code gives the same result as adding it, remove. Add no abstraction, option, or file the task does not need. Fix causes, not symptoms.
 
+**Simplest design.** Simplicity governs every change, not only refactors. Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Delete dead code in the lines you touch. Choose the design with the least code and the least for a reader to hold in mind.
+
 **Reuse first.** Before writing a helper or adding a dependency, search the codebase, the standard library, and the dependencies already installed.
 
 **Working is not done.** Make it work, then make it right (simple, clear, correct), then make it fast only if measured. Passing once is the first stage.
@@ -24,10 +26,8 @@ Apply to every code change.
 Read the files that match the work, in `references/`.
 
 - Designing a module, interface, or API: `contracts.md`, `modules.md`
-- Restructuring code, or a change that strains the current design: `simplicity.md`
 - Data models, types, domain rules: `domain-modeling.md`
 - Changing state, retries, concurrency, parallel agents: `state-changes.md`
-- Anything a user sees or calls (UI, CLI, API, error text): `product-design.md`
 - Cleanup, refactors, migrations, naming, comments: `hygiene.md`
 - Writing, changing, or deleting tests: `tests.md`
 - Declaring work done, or reporting a measurement: `verification.md`

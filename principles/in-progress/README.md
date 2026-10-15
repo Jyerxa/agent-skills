@@ -11,8 +11,8 @@ Cursor all load it the same way. There is nothing to configure.
 | Layer | What loads | When | Cost |
 | --- | --- | --- | --- |
 | 1 | The skill `description` | Always | about 45 tokens |
-| 2 | `SKILL.md` body: four always-rules and a topic index | The agent is writing, changing, debugging, or designing code | about 350 tokens |
-| 3 | One or two files from `references/` | The work matches a line in the index | 260 to 540 tokens each |
+| 2 | `SKILL.md` body: four always-rules and a topic index | The agent is writing, changing, debugging, or designing code | about 400 tokens |
+| 3 | One or two files from `references/` | The work matches a line in the index | 260 to 510 tokens each |
 
 A conversation that is not about code loads layer 1 only. A typical coding
 task loads layers 1 and 2 plus one or two topic files. Run `check.py` for
@@ -43,6 +43,7 @@ skills/in-progress/coding-principles/   the skill (everything an agent needs)
 principles/in-progress/                 maintainer material, not installed
   README.md             this file
   check.py              budget and format check
+  product-design.md     product design principles, held out of the skill
 principles/note.md      review log and open decisions
 ```
 

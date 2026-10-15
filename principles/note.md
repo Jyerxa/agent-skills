@@ -222,11 +222,11 @@ Skip: bounded contexts, repositories, domain events, rest of tactical DDD ceremo
 
 ## Build-out (drafted while user was away, 2026-10-15)
 
-Drafted all kept principles as one skill, now at `skills/in-progress/coding-principles/` (self-contained; maintainer README and check.py stay in `principles/in-progress/`). Design: one `coding-principles` skill, a short always-rules section in `SKILL.md`, and 12 topic files in `references/` loaded on demand by activity. Uses the standard SKILL.md format, so no per-agent setup.
+Drafted all kept principles as one skill, now at `skills/in-progress/coding-principles/` (self-contained; maintainer README and check.py stay in `principles/in-progress/`). Design: one `coding-principles` skill, a short always-rules section in `SKILL.md`, and 11 topic files in `references/` (12 before product-design moved out) loaded on demand by activity. Uses the standard SKILL.md format, so no per-agent setup.
 
 Decisions made while drafting (all easy to reverse; review these):
 - Always-rules in SKILL.md: Laziness Protocol ("Smallest change"), Search before you write ("Reuse first"), Make it work/right/fast ("Working is not done"), Prove It Works ("Prove it"). Moved out of their groups so nothing is duplicated.
-- Topic files are organized by activity, not by theme: simplicity, contracts, modules, domain-modeling, state-changes, product-design, hygiene, tests, verification, debugging, execution, agent-behavior.
+- Topic files are organized by activity, not by theme: simplicity, contracts, modules, domain-modeling, state-changes, hygiene, tests, verification, debugging, execution, agent-behavior.
 - State & domain modeling split across two files (domain-modeling, state-changes) so each loads only for its activity.
 - Tactical coding split across debugging and execution for the same reason.
 - Boundary Discipline drafted as ONE entry ("Validate at the edge, trust the inside"); the split question is still open.
@@ -250,6 +250,14 @@ Independent review (fresh subagent) applied, with these judgment calls:
 - Kept despite reviewer overlap flag: Expose less (Hyrum's law, user-approved) and Hide information, and Thin slice vs Sequence work, since the activities differ.
 - Renames for plainer titles: Build the Lever -> Script repeated work; Encode Lessons in Structure -> Turn repeated corrections into checks; Attack the Premise -> Test your assumptions; Blast radius -> Check what depends on your change; Prove It Works -> Verify before saying done.
 - Kept "Working is not done" as a slogan title on purpose (user wanted agents to remember it).
+
+PR #26 review round 1 (user notes):
+- Product design moved out of the skill to `principles/in-progress/product-design.md` (product design and coding are different activities). Removed from the SKILL.md index and the skill's topic files.
+- Simplicity made near always-on: new "Simplest design" always-rule in SKILL.md that sends the agent to `simplicity.md` on every change.
+- Redesign when the design stops fitting: trigger broadened from "special cases in more than one place" to any added or changed requirement. This supersedes the earlier tightening.
+- Subtract before you add: applies to every change, not only cluttered code.
+- Design for the least code: moved up before Minimize reader load; trigger no longer mentions over-design (an agent does not know it is over-designing).
+- Minimize reader load: "Cut" became "Minimize"; trigger covers designing, writing, and refactoring.
 
 Smoke tests (headless Claude Code, skill copied to .claude/skills): retry + parallel workers task loaded only state-changes.md; a bakery-name question loaded nothing; a unit-test task loaded only tests.md and applied "skip these tests". `npx skills add . --list` finds the skill only under `skills/`, so it must move to `skills/in-progress/coding-principles` to be installable (verified in a scratch copy).
 
