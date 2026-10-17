@@ -38,7 +38,7 @@ of the description.
 | Skill | Description |
 | --- | --- |
 | [`capture-process`](skills/in-progress/capture-process) | **In progress.** Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
-| [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a portable, animated HTML explorer with case walkthroughs, inspectable evidence and relationships, and visible uncertainty. |
+| [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a cinematic, portable HTML journey with expressive 3D scenes, choreographed camera movement, progressive discovery, and evidence available on demand. |
 | [`improve-process`](skills/in-progress/improve-process) | **In progress.** Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
 | [`coding-principles`](skills/in-progress/coding-principles) | **In progress.** Curated coding principles for agents. A short always-on core plus topic files that load only when the work needs them (design, state, tests, debugging, verification). |
 | [`system-discovery`](skills/system-discovery) | Guide an interview from a rough software idea to a system brief covering purpose, users, workflows, responsibilities, rules, and scope - ready to inform codebase design. |
@@ -58,7 +58,7 @@ Each skill can be installed on its own; consumers bundle the shared contract.
 `system-discovery` remains a separate workflow for defining a software system.
 
 The fictional workshop example includes a [capture](skills/in-progress/capture-process/fixtures/workshop-process.md),
-an [offline animated viewer](skills/in-progress/visualize-process/fixtures/workshop.html), and
+an [offline inspection viewer](skills/in-progress/visualize-process/fixtures/workshop.html) demonstrating evidence handling, and
 a [conditional improvement assessment](skills/in-progress/improve-process/fixtures/workshop-improvements.md).
 Download the HTML and open it locally; no site or server is required.
 
