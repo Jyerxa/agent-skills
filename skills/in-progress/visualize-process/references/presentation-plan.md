@@ -1,9 +1,45 @@
 # Derived presentation plans
 
-Use the default generated plan unless an evidence-backed layout or case trace
-would materially improve understanding. This is a renderer input, not a
-second maintained process model or an improvement contract. Regenerate it
-from the canonical Markdown when meaning changes.
+Use the generated plan as an evidence-linked starting point, then choose the
+focus and supported relationships that best explain the user's question.
+The default reading order is not a visual design prescription. This is a
+renderer input, not a second maintained process model or an improvement
+contract. Regenerate it from the canonical Markdown when meaning changes.
+
+## Storyboard before schema
+
+The JSON plan establishes semantic support; it does not design the experience.
+First sketch a concise visual storyboard in working notes. For each beat, name:
+
+| Decision | What to establish |
+| --- | --- |
+| Learning point | The one idea the viewer should understand after the beat. |
+| Basis | The exact record and field supporting any factual depiction. |
+| Visual subject | The object, model, space, or metaphor that embodies the idea. |
+| Choreography | What assembles, unfolds, separates, is revealed, or changes focus, and why. |
+| Camera | Where the viewer starts, how perspective or scale changes, and where it settles. |
+| On-screen content | A short headline, essential labels, and any qualification needed now. |
+| Interaction | How the viewer advances, explores, or opens the relevant evidence. |
+| Accessible state | The equivalent settled composition and text without motion. |
+
+Keep the storyboard disposable and outside `process-view/v1`; do not add keys
+to the schema to store it. A visually rich chapter may explain a single
+record, and a guided journey may move between concepts without asserting
+process order. The amount of prose or number of records does not determine
+the number of scenes.
+
+For example, a conceptual model could unfold into layers so the viewer can
+inspect a supported distinction, then the camera could pull back to reveal
+its relationship to the whole. An unknown outcome could become an unfinished
+part of the composition, with its question revealed on approach. These are
+possible visual strategies, not mandatory motifs. Physical arrangement must
+not silently claim a hierarchy, sequence, quantity, or business boundary.
+
+Choose a visual world specific to the material. Avoid reusing the same islands,
+tunnels, glowing nodes, or floating cards for every subject. Evidence handling
+is reusable; the art direction and journey deserve fresh decisions.
+
+## Evidence-linked plan
 
 The generator's `--write-view` option produces the full shape:
 
@@ -47,6 +83,36 @@ Basis pointers name existing record IDs and exact field names. The renderer
 shows their original values and source links on inspection. It checks that
 they resolve, not that the prose proves the depicted claim. Trace order must
 be semantically reviewed; link order alone is not sufficient evidence.
+
+### Choreography in custom viewers
+
+For the designed viewer, use cited frames and edges as the semantic foundation.
+Implement the storyboard's models, camera paths, easing, and reveals separately;
+`process-view/v1` does not accept extra animation keys. The stock renderer's
+focus cards are an inspection aid, not a substitute for scene choreography.
+
+Camera travel is an editorial device: approaching a detail, circling a model
+to expose a hidden relationship, or pulling back to recontextualize it. It
+must not look like an actual item's journey unless the source supports that
+journey. Keep a visual landmark or recognizable object across transitions
+so ambitious camera movement remains understandable. Compose each destination
+for reading; motion should lead to it rather than compete with it.
+
+Map each explanatory beat to a stable, inspectable state and its basis. Keep
+presentation progress separate from business time, completion, and certainty.
+A traveling marker represents a transfer only when its cited field supports
+that transfer; highlighting a prerequisite does not establish a handoff.
+Likewise, multiple focused records do not authorize concurrent animation of
+their actions. If a richer view depicts supported concurrency, review the
+source directly and preserve its qualification; the stock case-trace format
+does not encode parallel execution.
+
+Make each settled state reachable through manual steps and reduced motion.
+Cancel an in-flight transition before navigating or switching scenarios so
+the scene, labels, and evidence panel always describe the same beat.
+Keep full original fields and source locators available through inspection;
+they need not occupy the main stage. Preserve material qualifications beside
+the depiction itself so progressive disclosure never hides its limits.
 
 ## Edges
 
