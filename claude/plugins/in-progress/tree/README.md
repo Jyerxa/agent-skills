@@ -29,7 +29,7 @@ o: editor  j: ↓  k: ↑
 - Indent guides mark each level, each a faint step along the dusk from ember to violet; folder names are bold; file extensions are dim; hovering a row lifts it, and the row holding the keyboard focus carries a `▍` mark at the left edge.
 - Long paths show your home folder as `~` and elide their middle (`~/.claude/dev-mods/…/tree/README.md`); hover shows the whole path.
 - **Ember glow.** While Claude writes a file, a soft bell of light in the accent color sits over its row and fades across the four rows either side, the rim beside it lights, the `●` breathes in glyph and color, and the guide from the folder down to the file lights up; the glow fades out smoothly over half a second when the edit ends.
-- **Fold ripple.** Click a folder and its rows ripple out bottom-up before it folds, or ripple in top-down as it unfolds, a faint wash of light passing with them; under half a second however big the folder.
+- **Fold ripple.** Click a folder and its rows ripple out bottom-up before it folds, or ripple in top-down as it unfolds, a faint wash of light passing with them; under half a second however big the folder. With `animate` off the fold lands at once and the folder's row flashes instead, the same light as the ember glow, gone in under half a second.
 - **Focus cues.** While the pane holds the keyboard, a light pipe runs down its left side, ember at the top to violet at the bottom, the title's gradient brightens, and the title row says `esc to leave`; otherwise it says `ctrl+x tab to focus`, dim. The thick segment of the edge marks the row the keyboard focus is on.
 - `●` and a soft band of light sweeping through the name: Claude is editing (ember) or reading (moonlight) this file right now.
 - `·`: Claude touched it earlier this session; the dot cools from ember through violet to a faint silver over two minutes.
@@ -67,7 +67,7 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 |---|---|
 | Move through the tree | ↑ ↓ or `j` `k` while focused move the row cursor (the `▍` row); PgUp PgDn a page, Home End the ends. The window follows the cursor; the wheel scrolls without moving it |
 | Read a file | click it, or Enter on the cursor's row: the file opens above the prompt, where plan mode shows, as wide as the transcript and highlighted with line numbers. The tree stays in the pane and keeps the keyboard: ↑ ↓ / `j` `k`, PgUp PgDn and Home End scroll the file, the wheel over it does too, and `q` (or the `‹` path row) closes it with the cursor where it was |
-| Fold or unfold a folder | click it, or Enter on it. Folders named in `collapsedFolders` (`node_modules` by default) start folded, with a dim count of changed files; open one the same way, and your choice is remembered |
+| Fold or unfold a folder | click it, or Enter on it. Every folder starts folded (`startFolded`), with a dim count of changed files; open one the same way, and your choice is remembered across sessions. A chain like `src/main/java` opens with one press. Folders Claude edits in open on their own |
 | Mention a file in your next prompt | `m` on the cursor's row, or in the preview: `@path ` lands at the composer's cursor (a folder mentions as `@folder/ `) |
 | Open a file in your editor | `o` on the cursor's row, or in the preview at the top line in view; runs the `editor` setting |
 | See what changed | `g` while focused, or `/tree changes`: changed files grouped by state with `+added −removed` counts; `g` again returns to the tree |
@@ -79,7 +79,7 @@ The pane opens on its own in a terminal of 144 columns or more. `/tree` opens or
 | Scroll | the wheel |
 | Show gitignored entries | `h` while focused |
 | Refresh now | `r` while focused, or `/tree refresh` |
-| Fold or unfold everything | `c` / `e` while focused. `e` leaves the folders that start folded folded; open those one at a time |
+| Fold or unfold everything | `c` / `e` while focused. `e` leaves the folders named in `collapsedFolders` folded; open those one at a time |
 | Scroll to a file | `/tree reveal <path>` |
 | Mention or preview from the prompt | `/tree mention <path>`, `/tree preview <path>` |
 
@@ -105,12 +105,13 @@ Each field is a row in `/config` under the plugin's name.
 | `shimmer` | `sweep` | `sweep`, `pulse` (the name breathes in color once a second, for reduced motion) or `off`. |
 | `showIgnored` | false | Show gitignored entries, dimmed. |
 | `compactFolders` | true | Draw single-child folder chains on one row. |
-| `collapsedFolders` | `node_modules` | Comma-separated folder names, matched at any depth, drawn folded until you open them. Their contents are listed only when you first open one, so a huge `node_modules` costs nothing while folded and stays out of find. Claude working inside one does not open it; `/tree reveal` and the pinned file line do. Empty folds nothing. |
+| `startFolded` | true | Every folder starts folded until you open it; what you open stays open in later sessions, and the folders above a file Claude edits open for it (`followClaude`). Focus mode (`z`) shows its files regardless. Off, the tree starts fully expanded, as a file explorer does. |
+| `collapsedFolders` | `node_modules` | Comma-separated folder names, matched at any depth, drawn folded until you open them, even with `startFolded` off, and left folded by `e`. Their contents are listed only when you first open one, so a huge `node_modules` costs nothing while folded and stays out of find. Claude working inside one does not open it; `/tree reveal` and the pinned file line do. Empty folds nothing. |
 | `hiddenFolders` | *(empty)* | Comma-separated folder names, matched at any depth, left out of the tree and its find, as `.git` always is (`dist, .venv`). The Changes view still lists their changes, since it shows what git reports. Wins over `collapsedFolders`. |
 | `accent` | `#D97757` | Hex color the pane's light comes from: the glass's warm top, the title gradient, the glow, the lit guide and the focus edge. The cool end of the gradient is a fixed violet. |
 | `glow` | true | Light the rows around the file Claude is editing. |
 | `glass` | true | Draw the pane on the tinted glass slab. Off, rows sit on the terminal's own background; type colors, chips and the glow stay. |
-| `animate` | true | Ripple rows when a folder opens or closes. |
+| `animate` | true | Ripple rows when a folder opens or closes. Off, the folder's row flashes instead; `c`, `e` and following Claude never animate. |
 | `editor` | `code -g {path}:{line}` | What `o` runs. `{path}` is the file's absolute path, `{line}` the preview's top line (1 from the tree); a part in double quotes stays whole. On Windows a command with no extension runs through `cmd /c`, since `code` is a `.cmd` script. Use an editor that opens its own window: a terminal editor can't take over Claude's screen, but `wt nvim {path}` opens one in a new Windows Terminal tab. |
 | `previewIn` | `band` | Where a file preview shows. `band`: above the prompt, as wide as the transcript and up to half the terminal tall (Claude Code caps that band there; a survey or question takes it back while it's up). `pane`: inside the tree pane, at its width. |
 

@@ -55,10 +55,16 @@
       "description": "Draw a chain of single-child folders on one row (src/main/java).",
       "default": true
     },
+    "startFolded": {
+      "type": "boolean",
+      "title": "Start folded",
+      "description": "Draw every folder folded until you open it; what you open is remembered. Off, every folder starts open except the Folders folded at first.",
+      "default": true
+    },
     "collapsedFolders": {
       "type": "string",
       "title": "Folders folded at first",
-      "description": "Comma-separated folder names, matched at any depth, drawn folded until you open them (node_modules). Empty folds nothing.",
+      "description": "Comma-separated folder names, matched at any depth, drawn folded until you open them (node_modules). They are not listed until opened, and unfold-all leaves them folded. Empty folds nothing.",
       "default": "node_modules"
     },
     "hiddenFolders": {
@@ -88,7 +94,7 @@
     "animate": {
       "type": "boolean",
       "title": "Animate folds",
-      "description": "Ripple rows in and out when a folder opens or closes.",
+      "description": "Ripple rows in and out when a folder opens or closes. Off, the folder's row flashes instead.",
       "default": true
     },
     "editor": {

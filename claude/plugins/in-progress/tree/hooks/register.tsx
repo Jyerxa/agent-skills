@@ -2,12 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Hook, PluginOptions, Register, RenderElement, RenderInput, Timer } from 'claude-code'
 
 import type { ActiveFile, DirListing, FoldAnim, GitSnapshot, GitState, LineCounts, PaneView, Preview } from '../types'
-import { isDone, rowPhase, stepFor } from './anim'
+import { flashLevel, isDone, rowPhase, stepFor } from './anim'
 import { BLACK, CLAUDE_ACCENT, clamp, feather, glassPalette, glassRow, glowOver, glowWeight, gradientRuns, mix, parseHex, ramp, smoothstep, sweepAt, toHex, WHITE, type Rgb } from './color'
 import { fuzzyFilter } from './find'
 import { EMPTY_GIT, GROUPS, parseIgnored, parseNumstat, parseStatus, pathsIn } from './git'
 import { absoluteOf, ancestorsOf, baseName, cells, isAbsolute, isWindowsPath, normalizeRoot, parentOf, relativeTo, shortenPath, toPosix, truncateMiddle, truncateStart } from './paths'
-import { allDirs, allFiles, childDirs, flatten, isDirFolded, parseFolderList, type Row } from './tree'
+import { allDirs, allFiles, childDirs, flatten, isDirFolded, parseFolderList, type FoldRules, type Row } from './tree'
 
 const PANE = 'tree'
 const FLUSH_EVERY = 25
@@ -80,7 +80,9 @@ export type Config = {
   shimmer: 'sweep' | 'pulse' | 'off'
   showIgnored: boolean
   compactFolders: boolean
-  /** folder names that start folded until the person opens them */
+  /** every folder starts folded until the person opens it */
+  startFolded: boolean
+  /** folder names that start folded until the person opens them, and are not listed until then */
   collapsedFolders: ReadonlySet<string>
   /** folder names left out of the tree altogether */
   hiddenFolders: ReadonlySet<string>
@@ -130,6 +132,7 @@ function readConfig(o: PluginOptions): Config {
     shimmer: o['shimmer'] === 'pulse' ? 'pulse' : o['shimmer'] === 'off' ? 'off' : 'sweep',
     showIgnored: o['showIgnored'] === true,
     compactFolders: o['compactFolders'] !== false,
+    startFolded: o['startFolded'] !== false,
     collapsedFolders: typeof o['collapsedFolders'] === 'string' ? parseFolderList(o['collapsedFolders']) : new Set(['node_modules']),
     hiddenFolders: typeof o['hiddenFolders'] === 'string' ? parseFolderList(o['hiddenFolders']) : new Set<string>(),
     accent: typeof o['accent'] === 'string' && parseHex(o['accent']) ? o['accent'] : CLAUDE_ACCENT,
@@ -231,6 +234,17 @@ const listDir = async ($: Dollar, root: string, rel: string): Promise<DirListing
 
 /** A folder that starts folded and has not been opened: its listing waits until the person opens it. */
 const isLazy = (path: string, expanded: readonly string[]): boolean => cfg.collapsedFolders.has(baseName(path)) && !expanded.includes(path)
+
+/** Whether a folder starts folded, so opening it is remembered in `expanded`. */
+const startsFolded = (path: string): boolean => cfg.startFolded || cfg.collapsedFolders.has(baseName(path))
+
+/** Which folders show folded. Focus mode opens what `startFolded` folds, so the files in play show; the person's folds still hold. */
+const foldRules = (collapsed: readonly string[], expanded: readonly string[], focusMode: boolean): FoldRules => ({
+  collapsed: new Set(collapsed),
+  expanded: new Set(expanded),
+  foldByDefault: cfg.collapsedFolders,
+  startFolded: cfg.startFolded && !focusMode,
+})
 
 /** Lists `start` and everything beneath it (ignored folders only when `walkIgnored`), writing in batches. */
 const walk = async ($: Dollar, root: string, start: string, walkIgnored: boolean): Promise<void> => {
@@ -462,6 +476,8 @@ type View = {
   lines: Line[]
   /** rows a fold ripple is drawing dim as they arrive or leave */
   dimKeys: Set<string>
+  /** with the ripple off, the folder row that just folded or opened, and how lit it still is */
+  flash: { key: string; factor: number } | null
 }
 
 /** Reads the session state and lays the pane's lines out, top to bottom, for the view in force; a read while drawing subscribes the pane. */
@@ -486,7 +502,8 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
   ])
   await read($, frameAtom)
   const dimKeys = new Set<string>()
-  const out = { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, dimKeys }
+  const flash = anim?.kind === 'flash' ? { key: `d:${anim.path}`, factor: flashLevel(now - anim.startedAt) } : null
+  const out = { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, dimKeys, flash }
   let lines: Line[] = []
 
   // the preview in the pane draws its own body; in the band, the pane goes on showing the view under it
@@ -530,9 +547,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     keep = (path, kind) => (kind === 'dir' ? keepDirs.has(path) : inPlay.has(path))
   }
   const { rows, isFolded } = flatten(dirs, {
-    collapsed: new Set(collapsed),
-    expanded: new Set(expanded),
-    foldByDefault: cfg.collapsedFolders,
+    ...foldRules(collapsed, expanded, focusMode),
     hidden: cfg.hiddenFolders,
     showIgnored,
     ignored: new Set(git.ignored),
@@ -543,7 +558,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     keep,
   })
   for (const row of rows) lines.push({ key: row.key, kind: 'row', row })
-  if (anim) {
+  if (anim && anim.kind !== 'flash') {
     // the ripple: the folder's rows arrive top down or leave bottom up, dim at the edge of the move
     const elapsed = now - anim.startedAt
     let i = 0
@@ -567,7 +582,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
 // ---------- actions ----------
 
 /**
- * Unfolds the folders above `rel` and scrolls to it. A folder that starts folded (`node_modules`) is
+ * Unfolds the folders above `rel` and scrolls to it. A folder named in `collapsedFolders` (`node_modules`) is
  * opened only when the person asked (`unfoldDefault`), not when Claude's work merely passes through it.
  */
 const reveal = async ($: Dollar, rel: string, unfoldDefault: boolean): Promise<void> => {
@@ -578,16 +593,23 @@ const reveal = async ($: Dollar, rel: string, unfoldDefault: boolean): Promise<v
     await update($, collapsedAtom, c => c.filter(p => !above.has(p)))
     isChanged = true
   }
-  if (unfoldDefault) {
-    const expanded = await read($, expandedAtom)
-    const opening = [...above].filter(a => isLazy(a, expanded))
-    if (opening.length > 0) {
-      await update($, expandedAtom, e => [...e, ...opening])
-      isChanged = true
-      const dirs = await read($, dirsAtom)
-      const unlisted = ancestorsOf(rel).find(a => a !== '' && !dirs[a])
-      if (unlisted !== undefined) void walk($, await read($, rootAtom), unlisted, true)
-    }
+  const expanded = await read($, expandedAtom)
+  // top down, the folders that start folded open, stopping at one named in `collapsedFolders` unless asked: nothing below it shows
+  const opening: string[] = []
+  for (const a of above) {
+    if (!startsFolded(a) || expanded.includes(a)) continue
+    if (!unfoldDefault && cfg.collapsedFolders.has(baseName(a))) break
+    opening.push(a)
+  }
+  if (opening.length > 0) {
+    await update($, expandedAtom, e => [...e, ...opening])
+    isChanged = true
+  }
+  if (opening.some(a => isLazy(a, expanded))) {
+    // a folder not listed until opened: list the way down to the file
+    const dirs = await read($, dirsAtom)
+    const unlisted = ancestorsOf(rel).find(a => a !== '' && !dirs[a])
+    if (unlisted !== undefined) void walk($, await read($, rootAtom), unlisted, true)
   }
   if (isChanged) await savePrefs($)
   const now = await $.clock.now()
@@ -675,26 +697,30 @@ const foldDir = async ($: Dollar, path: string): Promise<void> => {
 /** Opens a folder, remembering the opening when the folder starts folded. */
 const unfoldDir = async ($: Dollar, path: string): Promise<void> => {
   await update($, collapsedAtom, c => c.filter(p => p !== path))
-  if (cfg.collapsedFolders.has(baseName(path))) await update($, expandedAtom, e => (e.includes(path) ? e : [...e, path]))
+  if (startsFolded(path)) await update($, expandedAtom, e => (e.includes(path) ? e : [...e, path]))
   await savePrefs($)
 }
 
-/** A click on a folder: unfold it with its rows rippling in, or ripple them out and then fold it. */
+/**
+ * A click on a folder: unfold it with its rows rippling in, or ripple them out and then fold it. With the ripple off,
+ * the fold lands at once and the folder's row flashes.
+ */
 const toggleDir = async ($: Dollar, path: string): Promise<void> => {
   await finishAnim($)
-  const isCollapsed = isDirFolded(path, {
-    collapsed: new Set(await read($, collapsedAtom)),
-    expanded: new Set(await read($, expandedAtom)),
-    foldByDefault: cfg.collapsedFolders,
-  })
+  const isCollapsed = isDirFolded(path, foldRules(await read($, collapsedAtom), await read($, expandedAtom), await read($, focusModeAtom)))
+  if (isCollapsed && !(await read($, dirsAtom))[path]) void walk($, await read($, rootAtom), path, true)
+  if (!cfg.animate) {
+    await (isCollapsed ? unfoldDir($, path) : foldDir($, path))
+    await startAnim($, 'flash', path, 0)
+    return
+  }
   if (isCollapsed) {
-    if (!(await read($, dirsAtom))[path]) void walk($, await read($, rootAtom), path, true)
     await unfoldDir($, path)
-    const count = cfg.animate ? await countDescendants($, path) : 0
+    const count = await countDescendants($, path)
     if (count > 0) await startAnim($, 'unfold', path, count)
     return
   }
-  const count = cfg.animate ? await countDescendants($, path) : 0
+  const count = await countDescendants($, path)
   if (count === 0) {
     await foldDir($, path)
     return
@@ -707,18 +733,22 @@ const toggleIgnored = async ($: Dollar): Promise<void> => {
   await savePrefs($)
 }
 
+/** Folds every folder; with `startFolded`, by going back to how the tree starts, which keeps compact chains whole. Never animated. */
 const collapseAll = async ($: Dollar): Promise<void> => {
+  await finishAnim($)
   const dirs = await read($, dirsAtom)
-  await update($, collapsedAtom, () => allDirs(dirs))
+  await update($, collapsedAtom, () => (cfg.startFolded ? [] : allDirs(dirs)))
   await update($, expandedAtom, () => [])
   await update($, offsetAtom, () => 0)
   await savePrefs($)
 }
 
-/** Opens every folder the person folded; folders that start folded go back to folded. */
+/** Opens every folder; folders named in `collapsedFolders` go back to folded. Never animated. */
 const expandAll = async ($: Dollar): Promise<void> => {
+  await finishAnim($)
+  const dirs = await read($, dirsAtom)
   await update($, collapsedAtom, () => [])
-  await update($, expandedAtom, () => [])
+  await update($, expandedAtom, () => (cfg.startFolded ? allDirs(dirs).filter(d => !cfg.collapsedFolders.has(baseName(d))) : []))
   await savePrefs($)
 }
 
@@ -1021,7 +1051,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const { Box, Text, Button, Code } = table
   const Input = 'Input' in table ? table.Input : undefined // the mobile surface draws no field
   const now = await $.clock.now()
-  const { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, lines, dimKeys } = await loadView($, now)
+  const { root, git, active, trail, showIgnored, view, filter, focusMode, peek, focused, lines, dimKeys, flash } = await loadView($, now)
   const [phase, offsetWanted, preview, previewWanted] = await Promise.all([read($, phaseAtom), read($, offsetAtom), read($, previewAtom), read($, previewOffsetAtom)])
   const isFile = view === 'file' && preview !== null
   /** the preview drawn in this pane; in the band, the pane goes on showing its rows and drives the band */
@@ -1150,8 +1180,12 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
   const glowPath = glowing ? glowing.path : latest ? latest[0] : ''
   const glowKey = isAbsolute(glowPath) ? `o:${glowPath}` : `f:${glowPath}`
   const glowAt = cfg.glow && glowFactor > 0 ? shown.findIndex(l => l.key === glowKey) : -1
-  /** how lit a shown line's rim is: the glowing row's brightest, its neighbours less */
-  const litOf = (s: number): number => (glowAt < 0 ? 0 : glowWeight(s - glowAt) * glowFactor)
+  // with the ripple off, a folder that folds or opens flashes in the same bell of light, fading at once
+  const flashAt = flash ? shown.findIndex(l => l.key === flash.key) : -1
+  const flashFactor = flash?.factor ?? 0
+  /** how lit a shown line's rim is: the glowing or flashing row's brightest, its neighbours less */
+  const litOf = (s: number): number =>
+    Math.max(glowAt < 0 ? 0 : glowWeight(s - glowAt) * glowFactor, flashAt < 0 ? 0 : glowWeight(s - flashAt) * flashFactor)
   // the guide from the folder down to the glowing file lights up
   const litLevel = new Map<string, number>()
   if (glowFactor > 0) {
@@ -1172,7 +1206,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     }
   }
 
-  /** What lies under a shown line: the slab, a diff line's green or red, a ripple's wash, and the glow over all of it. */
+  /** What lies under a shown line: the slab, a diff line's green or red, a ripple's wash, and the glow and flash over all of it. */
   const lineUnder = (s: number, line: Line): Rgb => {
     let under = slab(bodyStart + s)
     if (line.kind === 'diff') {
@@ -1182,6 +1216,7 @@ const drawPane = async ($: RenderDollar, e: RenderInput<'Pane'>): Promise<Render
     }
     if (dimKeys.has(line.key)) under = mix(under, pal.accent, 0.08) // a fold ripple passes like a wave of light
     if (glowAt >= 0) under = glowOver(pal, under, s - glowAt, glowFactor)
+    if (flashAt >= 0) under = glowOver(pal, under, s - flashAt, flashFactor)
     return under
   }
 

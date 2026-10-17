@@ -26,6 +26,7 @@ const base = (over: Partial<FlattenOptions> = {}): FlattenOptions => ({
   collapsed: new Set(),
   expanded: new Set(),
   foldByDefault: new Set(),
+  startFolded: false,
   hidden: new Set(),
   showIgnored: false,
   ignored: new Set(),
@@ -203,11 +204,35 @@ test('compaction does not run through a folder that starts folded', () => {
 })
 
 test('a folder that starts folded is matched by name at any depth', () => {
-  const r = { collapsed: new Set<string>(), expanded: new Set<string>(), foldByDefault: new Set(['node_modules']) }
+  const r = { collapsed: new Set<string>(), expanded: new Set<string>(), foldByDefault: new Set(['node_modules']), startFolded: false }
   expect(isDirFolded('node_modules', r)).toBe(true)
   expect(isDirFolded('packages/app/node_modules', r)).toBe(true)
   expect(isDirFolded('packages/app', r)).toBe(false)
   expect(isDirFolded('packages/app/node_modules', { ...r, expanded: new Set(['packages/app/node_modules']) })).toBe(false)
+})
+
+test('with startFolded every folder starts folded; opening one draws it, and only it', () => {
+  expect(show(flatten(MODULES, base({ startFolded: true })).rows)).toEqual(['▸ node_modules', '▸ src', 'README.md'])
+  expect(show(flatten(MODULES, base({ startFolded: true, expanded: new Set(['node_modules']) })).rows)).toEqual([
+    '▾ node_modules',
+    '  ▸ is-odd',
+    '  ▸ left-pad',
+    '▸ src',
+    'README.md',
+  ])
+  const r = { collapsed: new Set<string>(), expanded: new Set(['src']), foldByDefault: new Set<string>(), startFolded: true }
+  expect(isDirFolded('src', r)).toBe(false)
+  expect(isDirFolded('src', { ...r, collapsed: new Set(['src']) }), 'an explicit fold still wins').toBe(true)
+  expect(isDirFolded('lib', r)).toBe(true)
+})
+
+test('with startFolded a single-child chain still compacts into one folded row, keyed by its deepest folder', () => {
+  const dirs: Record<string, DirListing> = { '': d(['src/']), src: d(['main/']), 'src/main': d(['java/']), 'src/main/java': d(['App.java', 'Util.java']) }
+  const rows = flatten(dirs, base({ startFolded: true })).rows
+  expect(show(rows)).toEqual(['▸ src/main/java'])
+  expect(rows[0]?.key).toBe('d:src/main/java')
+  expect(show(flatten(dirs, base({ startFolded: true, expanded: new Set(['src/main/java']) })).rows)).toEqual(['▾ src/main/java', '  App.java', '  Util.java'])
+  expect(show(flatten(dirs, base({ startFolded: true, collapsed: new Set(['src']) })).rows), 'an explicit fold still breaks the chain').toEqual(['▸ src'])
 })
 
 test('hidden folders get no row, are not entered by compaction, not searched, and not walked', () => {
