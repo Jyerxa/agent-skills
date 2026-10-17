@@ -47,11 +47,12 @@ export type Preview = {
 }
 
 export type FoldAnim = {
-  kind: 'fold' | 'unfold'
+  /** a ripple of the folder's rows; or, with `animate` off, a flash of the folder's own row once the fold has landed */
+  kind: 'fold' | 'unfold' | 'flash'
   /** the folder whose rows move */
   path: string
   startedAt: number
-  /** how many rows the folder contributes */
+  /** how many rows the folder contributes; 0 for a flash */
   count: number
   stepMs: number
 }
@@ -70,7 +71,7 @@ declare module 'claude-code' {
       root: string
       dirs: Record<string, DirListing>
       collapsed: string[]
-      /** folders that start folded (`collapsedFolders`) which the person has opened */
+      /** folders that start folded (`startFolded`, `collapsedFolders`) which the person or a reveal has opened */
       expanded: string[]
       git: GitSnapshot
       active: ActiveFile[]
@@ -93,7 +94,7 @@ declare module 'claude-code' {
       preview: Preview | null
       /** the preview window's first line, 0-based */
       previewOffset: number
-      /** the fold or unfold ripple in progress */
+      /** the fold or unfold ripple, or the flash, in progress */
       anim: FoldAnim | null
       /** frame counter for the fold ripple and the trail's fade: a write redraws the pane */
       frame: number

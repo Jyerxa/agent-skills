@@ -117,9 +117,12 @@ const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 12, bodyColumn
 const mountBand = ($: Engine, surface: 'terminal' | 'desktop' = 'terminal') =>
   $.ui.mount({ plugin: 'tree', surface, component: 'AbovePrompt', requestId: 'band', props: BAND_PROPS })
 
+/** Every folder open, as the tree drew before `startFolded`: what the tests of the open tree describe. */
+const OPEN = { options: { startFolded: false } }
+
 const lastWrite = (writes: Write[], key: string): unknown => writes.filter(w => w.key === key).at(-1)?.value
 
-test('draws the whole working directory expanded with git badges, and a click previews the file', async ($, on) => {
+test('draws the whole working directory expanded with git badges, and a click previews the file', OPEN, async ($, on) => {
   world(on, [], [], {})
   await start($)
   for (const surface of ['terminal', 'desktop'] as const) {
@@ -146,7 +149,7 @@ test('draws the whole working directory expanded with git badges, and a click pr
   }
 })
 
-test('clicking a folder ripples its rows out, then folds it, and the fold is remembered in the store', async ($, on) => {
+test('clicking a folder ripples its rows out, then folds it, and the fold is remembered in the store', OPEN, async ($, on) => {
   const writes: Write[] = []
   const stored: Record<string, unknown> = {}
   const clock = world(on, [], writes, stored)
@@ -218,7 +221,7 @@ test('the legend is always drawn and sits under the rows, dim until the pane has
   await focused.unmount()
 })
 
-test('docked, the pane scrolls its own window with edge cues: rows move, the header and legend stay', async ($, on) => {
+test('docked, the pane scrolls its own window with edge cues: rows move, the header and legend stay', OPEN, async ($, on) => {
   // the cues sit in the blank rows under the header and above the legend
   world(on, [], [], {})
   await start($)
@@ -247,7 +250,7 @@ test('docked, the pane scrolls its own window with edge cues: rows move, the hea
   await ui.unmount()
 })
 
-test('the Changes view groups changed files with line counts, a press previews one, and ± peeks the diff', async ($, on) => {
+test('the Changes view groups changed files with line counts, a press previews one, and ± peeks the diff', OPEN, async ($, on) => {
   world(on, [], [], {})
   await start($)
   const ui = await mountTree($)
@@ -297,7 +300,7 @@ test('the filter narrows the tree with fuzzy matching, highlights the hits, and 
   await ui.unmount()
 })
 
-test('focus mode prunes the tree to the files in play', async ($, on) => {
+test('focus mode prunes the tree to the files in play', OPEN, async ($, on) => {
   world(on, [], [], {})
   await start($)
   const ui = await mountTree($)
@@ -311,7 +314,7 @@ test('focus mode prunes the tree to the files in play', async ($, on) => {
   await ui.unmount()
 })
 
-test('visual polish: indent guides, dim extensions, bold folders, the cursor mark on the focused row', async ($, on) => {
+test('visual polish: indent guides, dim extensions, bold folders, the cursor mark on the focused row', OPEN, async ($, on) => {
   world(on, [], [], {})
   await start($)
   const ui = await mountTree($)
@@ -386,7 +389,7 @@ test('a file outside the project is still shown, under its own heading', async (
 const pressKey = ($: Engine, by: number, bodyRows: number) =>
   $.ui.scroll({ component: 'Pane', requestId: 'tree', offset: 0, by, bodyRows, contentRows: bodyRows + 1, origin: { kind: 'person' } })
 
-test('arrow keys and j/k move the row cursor, the window follows it, and the wheel only scrolls', async ($, on) => {
+test('arrow keys and j/k move the row cursor, the window follows it, and the wheel only scrolls', OPEN, async ($, on) => {
   const writes: Write[] = []
   world(on, [], writes, {})
   await start($)
@@ -455,7 +458,7 @@ test('the preview above the prompt is as wide as the transcript and scrolls from
   await ui.unmount()
 })
 
-test('Enter on a folder folds it; on a file, with the preview in the pane, it shows the file there, pages it, and q goes back to the same row', { options: { previewIn: 'pane' } }, async ($, on) => {
+test('Enter on a folder folds it; on a file, with the preview in the pane, it shows the file there, pages it, and q goes back to the same row', { options: { previewIn: 'pane', startFolded: false } }, async ($, on) => {
   const writes: Write[] = []
   const spy: Spy = { text: FIFTY }
   world(on, [], writes, {}, spy)
@@ -529,7 +532,7 @@ test('/tree preview <path> opens the preview from the prompt', async ($, on) => 
   await band.unmount()
 })
 
-test('node_modules starts folded; a press opens it and the opening is remembered, another folds it, and e puts it back', async ($, on) => {
+test('node_modules starts folded; a press opens it and the opening is remembered, another folds it, and e puts it back', OPEN, async ($, on) => {
   const writes: Write[] = []
   const stored: Record<string, unknown> = {}
   const clock = world(on, [], writes, stored, { files: WITH_MODULES })
@@ -560,7 +563,7 @@ test('node_modules starts folded; a press opens it and the opening is remembered
   await ui.unmount()
 })
 
-test('Claude working inside node_modules does not open it, but /tree reveal does', async ($, on) => {
+test('Claude working inside node_modules does not open it, but /tree reveal does', OPEN, async ($, on) => {
   const writes: Write[] = []
   const clock = world(on, [], writes, {}, { files: WITH_MODULES })
   on('tool.call', { tool: 'Read' }, () => ({ deny: 'not run in a test' }))
@@ -578,7 +581,7 @@ test('Claude working inside node_modules does not open it, but /tree reveal does
   await ui.unmount()
 })
 
-test('collapsedFolders is configurable: an empty list folds nothing', { options: { collapsedFolders: '' } }, async ($, on) => {
+test('collapsedFolders is configurable: an empty list folds nothing', { options: { collapsedFolders: '', startFolded: false } }, async ($, on) => {
   world(on, [], [], {}, { files: WITH_MODULES })
   await start($)
   const ui = await mountTree($)
@@ -594,5 +597,88 @@ test('hiddenFolders leaves a folder out of the tree altogether', { options: { hi
   expect(await ui.find({ key: 'f:README.md' })).toBeDefined()
   expect(await ui.find({ key: 'd:skills/a' }), 'no row for a hidden folder').toBeUndefined()
   expect(await ui.find({ key: 'd:node_modules' }), 'hidden beats folded by default').toBeUndefined()
+  await ui.unmount()
+})
+
+test('folders start folded; a press opens one and the opening is remembered, c folds it back and e opens everything', async ($, on) => {
+  const writes: Write[] = []
+  const stored: Record<string, unknown> = {}
+  const clock = world(on, [], writes, stored)
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'd:skills/a' }), 'the chain still compacts into one row').toBeDefined()
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'its contents folded away').toBeUndefined()
+  expect(await ui.find({ key: 'f:README.md' }), 'files at the root show').toBeDefined()
+  await ui.press({ key: 'd:skills/a' })
+  await clock.advance(200)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'one press opens the whole chain').toBeDefined()
+  expect(lastWrite(writes, 'expanded')).toEqual(['skills/a'])
+  expect(stored[`expanded:${ROOT}`], 'remembered in the store').toEqual(['skills/a'])
+  await ui.press({ key: 'act:collapse' })
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'c folds it back').toBeUndefined()
+  expect(await ui.find({ key: 'd:skills/a' }), 'the chain stays whole').toBeDefined()
+  await ui.press({ key: 'act:expand' })
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'e opens everything').toBeDefined()
+  await ui.unmount()
+})
+
+test('a folder opened in an earlier session opens again', async ($, on) => {
+  world(on, [], [], { [`expanded:${ROOT}`]: ['skills/a'] })
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('following Claude opens the folders above the file it edits', async ($, on) => {
+  const clock = world(on, [], [], {})
+  on('tool.call', { tool: 'Edit' }, () => ({ deny: 'not run in a test' }))
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' })).toBeUndefined()
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/skills/a/SKILL.md', old_string: 'a', new_string: 'b' })
+  await clock.advance(200)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('focus mode shows the files in play though their folders start folded, and a press there folds', { options: { followClaude: false } }, async ($, on) => {
+  const clock = world(on, [], [], {})
+  on('tool.call', { tool: 'Read' }, () => ({ deny: 'not run in a test' }))
+  await start($)
+  await $.tool.call({ tool: 'Read', file_path: '/repo/skills/a/SKILL.md' })
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'folded in the whole tree').toBeUndefined()
+  await ui.press({ key: 'act:focus' })
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'shown in focus mode').toBeDefined()
+  await ui.press({ key: 'd:skills/a' })
+  await clock.advance(200)
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'the press folds the folder it shows open').toBeUndefined()
+  await ui.unmount()
+})
+
+test('with animate off a folder folds and opens at once and its row flashes; c and e never flash', { options: { animate: false, startFolded: false } }, async ($, on) => {
+  const writes: Write[] = []
+  const clock = world(on, [], writes, {})
+  await start($)
+  const ui = await mountTree($)
+  const backgrounds = async () => (await ui.findAll({ type: 'Box' })).map(b => b.props['backgroundColor'])
+  const animKind = () => (lastWrite(writes, 'anim') as { kind: string } | null)?.kind
+  await ui.press({ key: 'd:skills/a' })
+  expect(lastWrite(writes, 'collapsed'), 'folded at once').toEqual(['skills/a'])
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'no ripple: the rows go at once').toBeUndefined()
+  expect(animKind(), 'the row flashes').toBe('flash')
+  const lit = await backgrounds()
+  await clock.advance(500)
+  expect(lastWrite(writes, 'anim'), 'and the flash fades').toBe(null)
+  expect(await backgrounds(), 'the light is gone').not.toEqual(lit)
+  await ui.press({ key: 'd:skills/a' })
+  expect(await ui.find({ key: 'f:skills/a/SKILL.md' }), 'opened at once').toBeDefined()
+  expect(animKind(), 'opening flashes too').toBe('flash')
+  await clock.advance(500)
+  const animWrites = writes.filter(w => w.key === 'anim').length
+  await ui.press({ key: 'act:collapse' })
+  await ui.press({ key: 'act:expand' })
+  expect(writes.filter(w => w.key === 'anim').length, 'fold all and unfold all do not flash').toBe(animWrites)
   await ui.unmount()
 })

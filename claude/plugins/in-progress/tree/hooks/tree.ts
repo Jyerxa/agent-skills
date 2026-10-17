@@ -22,6 +22,8 @@ export type FlattenOptions = {
   expanded: ReadonlySet<string>
   /** folder names that start folded (`node_modules`) */
   foldByDefault: ReadonlySet<string>
+  /** every folder starts folded until the person opens it */
+  startFolded: boolean
   /** folder names left out of the tree altogether, as `.git` always is */
   hidden: ReadonlySet<string>
   showIgnored: boolean
@@ -42,11 +44,11 @@ export const parseFolderList = (text: string): Set<string> =>
 /** Whether a folder of this name is left out of the tree: `.git` always, plus the configured names. */
 export const isHiddenName = (name: string, hidden: ReadonlySet<string>): boolean => name === '.git' || hidden.has(name)
 
-export type FoldRules = Pick<FlattenOptions, 'collapsed' | 'expanded' | 'foldByDefault'>
+export type FoldRules = Pick<FlattenOptions, 'collapsed' | 'expanded' | 'foldByDefault' | 'startFolded'>
 
 /** Whether a folder shows folded: the person folded it, or it starts folded and they have not opened it. */
 export const isDirFolded = (path: string, r: FoldRules): boolean =>
-  r.collapsed.has(path) || (r.foldByDefault.has(baseName(path)) && !r.expanded.has(path))
+  r.collapsed.has(path) || ((r.startFolded || r.foldByDefault.has(baseName(path))) && !r.expanded.has(path))
 
 /** Every listed file, tree-relative, sorted: what the filter searches. */
 export const allFiles = (dirs: Readonly<Record<string, DirListing>>, hidden: ReadonlySet<string> = new Set()): string[] => {
@@ -82,6 +84,8 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
   }
 
   let maxDepth = 0
+  /** a chain runs through folders folded only by `startFolded`, so it draws as one row that one press opens */
+  const chainRules: FoldRules = { ...o, startFolded: false }
 
   const build = (foldDepth: number): Row[] => {
     const rows: Row[] = []
@@ -104,7 +108,7 @@ export function flatten(dirs: Readonly<Record<string, DirListing>>, o: FlattenOp
           let name = en.name
           if (o.compactFolders) {
             for (;;) {
-              if (isDirFolded(path, o)) break
+              if (isDirFolded(path, chainRules)) break
               const child = dirs[path]
               if (!child || child.entries.length !== 1) break
               const only = child.entries[0]
