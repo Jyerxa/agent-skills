@@ -5,15 +5,15 @@ description: 'In progress: Coding principles for agents. Use when writing, chang
 
 # Coding principles
 
-Project instructions and existing code conventions override these principles. Read only the topic files the current work needs.
+**Unwritten code is the best code.** Every line carries a cognitive cost to read and a maintenance cost to keep. Ask first whether the task needs new code at all, then add only the lines it cannot work without.
+
+Project instructions and existing code conventions override these principles.
 
 ## Always
 
-Apply to every code change.
-
 **Smallest change.** Make the smallest change that fully solves the problem. Where removing code gives the same result as adding it, remove. Add no abstraction, option, or file the task does not need. Fix causes, not symptoms.
 
-**Simplest design.** Simplicity governs every change, not only refactors. Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Ask what the change lets you delete or rewrite before you add to it. Choose the design with the least code and the least for a reader to hold in mind.
+**Simplest design.** Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Choose the design that leaves the least for a reader to hold in mind.
 
 **Pure logic, thin wiring.** Whenever possible, keep business logic in pure functions and framework wiring thin, so logic tests without the framework.
 
@@ -27,7 +27,7 @@ Apply to every code change.
 
 ## Topic files
 
-Read the files that match the work, in `references/`.
+Read only the files that match the work, in `references/`.
 
 - Designing a module, interface, or API: `contracts.md`, `modules.md`
 - Data models, types, domain rules: `domain-modeling.md`
