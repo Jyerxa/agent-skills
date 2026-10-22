@@ -147,7 +147,7 @@ Configuration (`userConfig` in `plugin.json`; each field is a `/config` row):
 
 ### 4.7 Views (built 2026-10-10, chosen one by one by the user)
 
-- F21. **Changes view** (`g`, `/tree changes`): a flat list of only the changed files, grouped by state (Conflicted, Modified, Staged, Added, Renamed, Deleted, Untracked), with `+n −m` line counts from `git diff HEAD --numstat` (untracked files counted by reading them; binaries say `bin`). Paths are truncated at the start so the file name always shows. A `±` button at the right edge opens the **diff peek**: the file's unified diff against HEAD (an untracked file against nothing), colored by line, shown inside the same pane with the file and its counts in the header; `g` or the header goes back. Line counts are fetched only while this view is open.
+- F21. **Changes view** (`g`, `/tree changes`): a flat list of only the changed files, grouped by state (Conflicted, Modified, Staged, Added, Renamed, Deleted, Untracked), with `+n −m` line counts from `git diff HEAD --numstat` (untracked files counted by reading them, except one over 1 MB, which is left uncounted; binaries say `bin`). Paths are truncated at the start so the file name always shows. A `±` button at the right edge opens the **diff peek**: the file's unified diff against HEAD (an untracked file against nothing), colored by line, shown inside the same pane with the file and its counts in the header; `g` or the header goes back. Line counts are fetched only while this view is open.
 - F22. **Filter** (`f`, `/tree find <text>`): an input row under the header narrows every listed file to fuzzy matches (each query character in order; boundary hits and runs rank higher, and a match in the file name beats one in a folder, so `prd` finds `docs/PRD.md`). Matches show flattened with the hits in `claude` color, best first, capped at 200. Enter previews the best match (it mentioned it before M5; `m` on a match row still does); `×` or `f` closes. Surfaces without an input field show the text and take `/tree find`.
 - F23. **Focus mode** (`z`): prune the tree to the files with git changes or touched by Claude this session and the folders that lead to them, so the tree breathes with the work. Remembered across sessions.
 - F24. **Scroll cue.** While the rows overflow the window, a one-cell scrollbar at the right edge (dim track, bright thumb sized and placed by the window) and dim `↑ N more` / `↓ N more` lines in the blank rows under the header and above the legend. Nothing is drawn when the tree fits.
@@ -387,12 +387,14 @@ A binary or oversized file shows one note in place of the code:
 | Trigger | Action | Cost |
 |---|---|---|
 | File tool call ends | Debounced (300 ms) git status, re-list the file's directory | One git call, one directory list |
-| Bash ends | Debounced git status | One git call |
+| Bash ends | Debounced git status, re-list the root (so the ignored list is read again: the command may have changed a `.gitignore` or the branch) | Two git calls, one directory list |
 | Turn running | Git status every 3 s | About 50 ms per call on a mid-size repo |
 | Idle, pane shown | Git status every 20 s | Negligible |
 | Pane hidden or not placed | No timers | Zero |
 | Open | One recursive walk, root first, in the background; the pane paints the root while deeper folders fill in | One list per folder, once |
 | Each git refresh | Re-list only the folders whose mtime changed | One stat per folder per refresh |
+| Open or `r` | Ask git again where the root sits in its repository and what it ignores; a poll reuses both (issue #11) | Two git calls |
+| A refresh that re-lists a folder | Ask git again what it ignores, before listing | One git call |
 | Shimmer | 10 redraws per second while any file is active; none otherwise | Bounded by active files |
 
 ### 6.2 Performance

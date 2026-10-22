@@ -42,8 +42,17 @@ const PANE_PROPS = {
 
 type Write = { key: string; value: unknown }
 
-/** What a test reads back from beneath the plugin, and what it hands it: the text any file reads as. */
-type Spy = { text?: string; argv?: string[][]; opens?: { columns?: number }[]; files?: Record<string, Entry[]> }
+/** What a test reads back from beneath the plugin, and what it hands it: the text any file reads as, git's status and ignored listing, file sizes by path. */
+type Spy = {
+  text?: string
+  argv?: string[][]
+  opens?: { columns?: number }[]
+  files?: Record<string, Entry[]>
+  status?: string
+  ignored?: string
+  sizes?: Record<string, number>
+  reads?: string[]
+}
 
 /** The world beneath the plugin: a clock and store in memory, a fake repo on disk, git answered from fixtures. */
 const world = (on: On, filled: string[], writes: Write[], stored: Record<string, unknown>, spy: Spy = {}) => {
@@ -87,13 +96,20 @@ const world = (on: On, filled: string[], writes: Write[], stored: Record<string,
   // the engine hands the op an absolute path in the host's spelling (C:\repo on Windows); key the fixture by the POSIX form
   const posix = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
   on('fs.list', ($, e) => ({ value: ((spy.files ?? FILES)[posix(e.path)] ?? []).map(x => ({ ...x, size: 0, mtimeMs: 0, isLink: false })) }))
-  on('fs.stat', () => ({ value: { kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false } }))
-  on('fs.read', () => ({ value: spy.text ?? 'one\ntwo\n' }))
+  on('fs.stat', ($, e) => {
+    const path = posix(e.path).replace(/\/$/, '')
+    return { value: { kind: (spy.files ?? FILES)[path] ? ('dir' as const) : ('file' as const), size: spy.sizes?.[path] ?? 0, mtimeMs: 1, isLink: false } }
+  })
+  on('fs.read', ($, e) => {
+    spy.reads?.push(posix(e.path))
+    return { value: spy.text ?? 'one\ntwo\n' }
+  })
   on('process.run', ($, e) => {
     spy.argv?.push([...e.argv])
     const sub = e.argv[1]
     const isNumstat = e.argv.includes('--numstat')
-    const stdout = sub === 'rev-parse' ? '\n' : sub === 'status' ? STATUS : sub === 'diff' ? (isNumstat ? NUMSTAT : DIFF) : ''
+    const stdout =
+      sub === 'rev-parse' ? '\n' : sub === 'status' ? (spy.status ?? STATUS) : sub === 'ls-files' ? (spy.ignored ?? '') : sub === 'diff' ? (isNumstat ? NUMSTAT : DIFF) : ''
     return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('prompt.fill', ($, e) => {
@@ -680,5 +696,84 @@ test('with animate off a folder folds and opens at once and its row flashes; c a
   await ui.press({ key: 'act:collapse' })
   await ui.press({ key: 'act:expand' })
   expect(writes.filter(w => w.key === 'anim').length, 'fold all and unfold all do not flash').toBe(animWrites)
+  await ui.unmount()
+})
+
+test('a poll runs git status alone: the prefix and the ignored list are read on a full refresh, and no counts under a preview of the tree', async ($, on) => {
+  const spy: Spy = { argv: [] }
+  const clock = world(on, [], [], {}, spy)
+  await start($)
+  const ui = await mountTree($)
+  const pollRuns = async () => {
+    const before = spy.argv?.length ?? 0
+    await clock.advance(20_000) // one idle poll
+    return spy.argv?.slice(before).map(argv => argv.slice(0, 2).join(' '))
+  }
+  expect(await pollRuns(), 'over the tree').toEqual(['git status'])
+  await ui.press({ key: 'f:README.md' })
+  expect(await pollRuns(), 'with a file previewed from the tree').toEqual(['git status'])
+  await ui.unmount()
+})
+
+test('a refresh that lists a folder reads the ignored list again, so a file Claude writes that git ignores stays hidden', async ($, on) => {
+  const spy: Spy = { argv: [] }
+  const clock = world(on, [], [], {}, spy)
+  on('tool.call', { tool: 'Write' }, () => ({ deny: 'not run in a test' }))
+  await start($)
+  const ui = await mountTree($)
+  spy.files = { ...FILES, '/repo': [...(FILES['/repo'] ?? []), { name: 'out.log', kind: 'file' }] }
+  spy.ignored = 'out.log\0'
+  await $.tool.call({ tool: 'Write', file_path: '/repo/out.log', content: 'log' })
+  await clock.advance(300)
+  expect(await ui.find({ key: 'f:out.log' }), 'hidden as ignored').toBeUndefined()
+  await ui.press({ key: 'act:ignored' })
+  expect(await ui.find({ key: 'f:out.log' }), 'listed all the same: h shows it').toBeDefined()
+  await ui.unmount()
+})
+
+test('a new folder git ignores is not walked when a poll lists the folder it appeared in', async ($, on) => {
+  const writes: Write[] = []
+  const spy: Spy = {}
+  const clock = world(on, [], writes, {}, spy)
+  await start($)
+  spy.files = {
+    ...FILES,
+    '/repo': [...(FILES['/repo'] ?? []), { name: '.venv', kind: 'dir' }, { name: 'pyproject.toml', kind: 'file' }],
+    '/repo/.venv': [{ name: 'lib', kind: 'dir' }],
+    '/repo/.venv/lib': [{ name: 'site.py', kind: 'file' }],
+  }
+  spy.status = ['# branch.oid 1234567', '# branch.head main', '? pyproject.toml', ''].join('\0')
+  spy.ignored = '.venv/\0'
+  await clock.advance(20_000) // the poll sees the untracked file and lists the root
+  const listed = Object.keys(lastWrite(writes, 'dirs') as Record<string, unknown>)
+  expect(listed, 'the root is listed again').toContain('')
+  expect(listed.filter(dir => dir.startsWith('.venv')), 'nothing inside .venv').toEqual([])
+})
+
+test('the Changes view counts an untracked file by reading it, but not a folder or a file too large to read on every poll', async ($, on) => {
+  const status = ['# branch.oid 1234567', '# branch.head main', '? notes.md', '? big.log', '? skills/', ''].join('\0')
+  const spy: Spy = { status, sizes: { '/repo/big.log': 5_000_000 }, reads: [] }
+  world(on, [], [], {}, spy)
+  await start($)
+  const ui = await mountTree($)
+  await ui.press({ key: 'act:changes' })
+  expect((await ui.find({ key: 'h:f:notes.md' }))?.text, 'two lines added').toContain('+2 −0')
+  expect((await ui.find({ key: 'h:f:big.log' }))?.text, 'no count, and not called binary').not.toMatch(/\+|bin/)
+  expect((await ui.find({ key: 'h:f:skills/' }))?.text, 'a folder git lists whole: no count either').not.toMatch(/\+|bin/)
+  expect(new Set(spy.reads), 'neither is read').toEqual(new Set(['/repo/notes.md']))
+  await ui.unmount()
+})
+
+test('after a Bash call the tree asks git again what it ignores, so a .gitignore the command changed takes effect', async ($, on) => {
+  const spy: Spy = {}
+  const clock = world(on, [], [], {}, spy)
+  on('tool.call', { tool: 'Bash' }, () => ({ deny: 'not run in a test' }))
+  await start($)
+  const ui = await mountTree($)
+  expect(await ui.find({ key: 'f:README.md' })).toBeDefined()
+  spy.ignored = 'README.md\0'
+  await $.tool.call({ tool: 'Bash', command: "echo README.md >> .gitignore" })
+  await clock.advance(300)
+  expect(await ui.find({ key: 'f:README.md' }), 'now ignored, so hidden').toBeUndefined()
   await ui.unmount()
 })

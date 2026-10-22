@@ -9,7 +9,6 @@ export const EMPTY_GIT: GitSnapshot = {
   behind: 0,
   files: {},
   dirCounts: {},
-  ignored: [],
   numstat: {},
 }
 

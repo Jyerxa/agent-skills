@@ -117,7 +117,7 @@ Each field is a row in `/config` under the plugin's name.
 
 ## How it stays cheap
 
-The tree is walked once at open, root first so the pane paints immediately. Git is polled every 3 seconds while a turn runs and every 20 seconds idle, and only while the pane is shown. A file tool call re-lists just that file's folder. The shimmer redraws ten times a second only while a file is active. Line counts are fetched only while the Changes view is open. A fold ripple runs a 30 fps frame clock only for its own half second. Nothing runs while the pane is hidden. Trees over 2,000 rows fold their deepest levels; nothing is hidden, only folded.
+The tree is walked once at open, root first so the pane paints immediately. Git is polled every 3 seconds while a turn runs and every 20 seconds idle, and only while the pane is shown. A poll runs `git status` alone: where the folder sits in its repository and what git ignores are asked again only on a refresh (`r`) or when the tree lists a folder. A file tool call re-lists just that file's folder; a Bash command re-lists the top folder. The shimmer redraws ten times a second only while a file is active. Line counts are fetched only while the Changes view is open, alongside the status, and an untracked file over 1 MB is left uncounted rather than read on every poll. A fold ripple runs a 30 fps frame clock only for its own half second. Nothing runs while the pane is hidden. Trees over 2,000 rows fold their deepest levels; nothing is hidden, only folded.
 
 ## Development
 
