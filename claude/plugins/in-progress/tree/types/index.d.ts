@@ -24,8 +24,6 @@ export type GitSnapshot = {
   files: Record<string, GitState>
   /** tree-relative directory ('' is the root) -> changed files beneath it */
   dirCounts: Record<string, number>
-  /** tree-relative ignored paths; a directory ends with '/' */
-  ignored: string[]
   /** tree-relative path -> lines added and removed against HEAD; filled while the Changes view is open */
   numstat: Record<string, LineCounts>
 }
@@ -74,6 +72,8 @@ declare module 'claude-code' {
       /** folders that start folded (`startFolded`, `collapsedFolders`) which the person or a reveal has opened */
       expanded: string[]
       git: GitSnapshot
+      /** tree-relative paths git ignores, a directory ending with '/'; read again only when the tree lists folders, not on every poll */
+      ignored: string[]
       active: ActiveFile[]
       trail: Record<string, number>
       phase: number
