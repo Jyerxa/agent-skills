@@ -1,0 +1,21 @@
+name: Code review skill checks
+on:
+  pull_request:
+    paths:
+      - 'skills/in-progress/code-review/**'
+      - 'skills/in-progress/coding-principles/**'
+      - 'reviews/in-progress/code-review/**'
+      - '.github/workflows/code-review.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate review fixtures and principle references
+        run: python3 reviews/in-progress/code-review/check.py
