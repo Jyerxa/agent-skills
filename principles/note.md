@@ -268,6 +268,8 @@ PR #26 review round 2 (user notes):
 
 - Hygiene made always-on like simplicity: new "Leave it clean" always-rule in SKILL.md that sends the agent to `hygiene.md` on every change; removed from the topic index. Finish the migration trigger shortened to "replacing an API" (dropped "you were asked to replace").
 
+- Laziness Protocol strengthened with an opening rule above the always-rules: "Unwritten code is the best code." Every line has a cognitive cost and a maintenance cost; ask whether the task needs new code at all, then add only the lines it cannot work without. To stay within the 350-word body budget, cut lines this rule or other rules already cover: "Apply to every code change", "Simplicity governs every change", "Ask what the change lets you delete or rewrite" (Smallest change and simplicity.md cover it), "least code" in Simplest design, and the duplicate "Read only the topic files" line.
+
 Smoke tests (headless Claude Code, skill copied to .claude/skills): retry + parallel workers task loaded only state-changes.md; a bakery-name question loaded nothing; a unit-test task loaded only tests.md and applied "skip these tests". `npx skills add . --list` finds the skill only under `skills/`, so it must move to `skills/in-progress/coding-principles` to be installable (verified in a scratch copy).
 
 ## Open questions
