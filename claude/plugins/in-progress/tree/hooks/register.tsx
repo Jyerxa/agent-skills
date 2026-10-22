@@ -29,6 +29,8 @@ const FILTER_MAX = 200
 const MAX_ROWS = 2000
 const PEEK_MAX_LINES = 5000
 const UNTRACKED_COUNT_MAX = 100
+/** an untracked file over this size is left uncounted: the Changes view reads each one again on every poll */
+const COUNT_MAX_BYTES = 1_000_000
 /** how long the "last:" line lingers after Claude closes a file */
 const LAST_LINGER_MS = 8_000
 /** how long the glow takes to fade once the edit ends, and how long the shimmer clock keeps ticking to draw that fade */
@@ -55,6 +57,7 @@ const dirsAtom = atom({ plugin: 'tree', key: 'dirs' } as const, {} as Record<str
 const collapsedAtom = atom({ plugin: 'tree', key: 'collapsed' } as const, [] as string[])
 const expandedAtom = atom({ plugin: 'tree', key: 'expanded' } as const, [] as string[])
 const gitAtom = atom({ plugin: 'tree', key: 'git' } as const, EMPTY_GIT)
+const ignoredAtom = atom({ plugin: 'tree', key: 'ignored' } as const, [] as string[])
 const activeAtom = atom({ plugin: 'tree', key: 'active' } as const, [] as ActiveFile[])
 const trailAtom = atom({ plugin: 'tree', key: 'trail' } as const, {} as Record<string, number>)
 const phaseAtom = atom({ plugin: 'tree', key: 'phase' } as const, 0)
@@ -112,6 +115,8 @@ let lastPersonScrollAt = 0
 let walkGeneration = 0
 let fullWalk: Promise<void> | undefined
 let untrackedMode: 'all' | 'normal' = 'all'
+/** where the root sits in its repository ('' at the top, else 'sub/dir/'): it changes only with the root, so a poll reuses it */
+let gitPrefix: { root: string; prefix: string } | undefined
 /** rows the pane showed at its last draw, and where it was seated: what scrolling and reveal size themselves to */
 let lastVisible = 20
 let lastPlacement: 'dock' | 'inline' = 'dock'
@@ -162,51 +167,69 @@ const latestOf = (trail: Record<string, number>): [string, number] | undefined =
 
 // ---------- git ----------
 
-/** Lines in a text file, or null for a binary or unreadable one. */
-const countLines = async ($: Dollar, abs: string): Promise<number | null> => {
+/** An untracked file's lines, counted as added: binary for a binary or unreadable file; none for a folder (git's normal mode lists one whole) or a file too large to read on every poll. */
+const countUntracked = async ($: Dollar, abs: string): Promise<LineCounts | undefined> => {
   try {
+    const { kind, size } = await $.fs.stat(abs)
+    if (kind !== 'file' || size > COUNT_MAX_BYTES) return undefined
     const text = await $.fs.read(abs)
-    if (isBinary(text)) return null
-    return text === '' ? 0 : splitLines(text).length
+    if (!isBinary(text)) return { added: text === '' ? 0 : splitLines(text).length, removed: 0, isBinary: false }
   } catch {
-    return null
+    // unreadable: shown as binary
   }
+  return { added: 0, removed: 0, isBinary: true }
+}
+
+/** The root's path inside its repository, or null outside one. */
+const readPrefix = async ($: Dollar, root: string): Promise<string | null> => {
+  if (gitPrefix?.root === root) return gitPrefix.prefix
+  const top = await $.process.run(['git', 'rev-parse', '--show-prefix'], { cwd: root, timeoutMs: 10_000 })
+  if (top.exitCode !== 0) return null
+  gitPrefix = { root, prefix: toPosix(top.stdout.trim()) }
+  return gitPrefix.prefix
 }
 
 const readGit = async ($: Dollar, root: string, withCounts: boolean): Promise<GitSnapshot> => {
-  const at = await $.clock.now()
   try {
-    const top = await $.process.run(['git', 'rev-parse', '--show-prefix'], { cwd: root, timeoutMs: 10_000 })
-    if (top.exitCode !== 0) return EMPTY_GIT
-    const prefix = toPosix(top.stdout.trim())
-    const [status, ignored] = await Promise.all([
-      $.process.run(['git', 'status', '--porcelain=v2', '-z', '--branch', `--untracked-files=${untrackedMode}`], { cwd: root, timeoutMs: 20_000 }),
-      $.process.run(['git', 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { cwd: root, timeoutMs: 20_000 }),
+    const prefix = await readPrefix($, root)
+    if (prefix === null) return EMPTY_GIT
+    const at = await $.clock.now()
+    const [status, ns] = await Promise.all([
+      // timed on its own, so the numstat beside it does not make status look slow
+      $.process.run(['git', 'status', '--porcelain=v2', '-z', '--branch', `--untracked-files=${untrackedMode}`], { cwd: root, timeoutMs: 20_000 }).then(async ran => {
+        if ((await $.clock.now()) - at > SLOW_STATUS_MS) untrackedMode = 'normal'
+        return ran
+      }),
+      withCounts ? $.process.run(['git', 'diff', 'HEAD', '--numstat', '-z'], { cwd: root, timeoutMs: 20_000 }) : undefined,
     ])
-    const took = (await $.clock.now()) - at
-    if (took > SLOW_STATUS_MS) untrackedMode = 'normal'
-    if (status.exitCode !== 0) return { ...(await read($, gitAtom)), isRepo: true, failed: true }
+    if (status.exitCode !== 0) {
+      gitPrefix = undefined // the repository may be gone: the next poll asks again
+      return { ...(await read($, gitAtom)), isRepo: true, failed: true }
+    }
     const parsed = parseStatus(status.stdout, prefix)
-    let numstat: Record<string, LineCounts> = {}
+    const numstat = ns?.exitCode === 0 ? parseNumstat(ns.stdout, prefix) : {}
     if (withCounts) {
-      const ns = await $.process.run(['git', 'diff', 'HEAD', '--numstat', '-z'], { cwd: root, timeoutMs: 20_000 })
-      if (ns.exitCode === 0) numstat = parseNumstat(ns.stdout, prefix)
       const untracked = pathsIn(parsed.files, 'untracked').slice(0, UNTRACKED_COUNT_MAX)
-      const lineCounts = await Promise.all(untracked.map(path => countLines($, absoluteOf(root, path))))
+      const counts = await Promise.all(untracked.map(path => countUntracked($, absoluteOf(root, path))))
       untracked.forEach((path, i) => {
-        const n = lineCounts[i] ?? null
-        numstat[path] = n === null ? { added: 0, removed: 0, isBinary: true } : { added: n, removed: 0, isBinary: false }
+        const c = counts[i]
+        if (c) numstat[path] = c
       })
     }
-    return {
-      isRepo: true,
-      failed: false,
-      ...parsed,
-      ignored: ignored.exitCode === 0 ? parseIgnored(ignored.stdout) : [],
-      numstat,
-    }
+    return { isRepo: true, failed: false, ...parsed, numstat }
   } catch {
     return { ...(await read($, gitAtom)), failed: true }
+  }
+}
+
+/** Reads again what git ignores. The tree needs it when it lists folders, to hide ignored entries and not walk ignored folders; a poll that lists nothing does not. */
+const rereadIgnored = async ($: Dollar, root: string): Promise<void> => {
+  try {
+    const ran = await $.process.run(['git', 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'], { cwd: root, timeoutMs: 20_000 })
+    if ((await read($, rootAtom)) !== root) return // the root moved while git ran: this list is the old root's
+    await update($, ignoredAtom, () => (ran.exitCode === 0 ? parseIgnored(ran.stdout) : []))
+  } catch {
+    // keep the last list
   }
 }
 
@@ -249,9 +272,9 @@ const foldRules = (collapsed: readonly string[], expanded: readonly string[], fo
 /** Lists `start` and everything beneath it (ignored folders only when `walkIgnored`), writing in batches. */
 const walk = async ($: Dollar, root: string, start: string, walkIgnored: boolean): Promise<void> => {
   const generation = walkGeneration
-  const ignored = new Set((await read($, gitAtom)).ignored)
+  const ignored = new Set(await read($, ignoredAtom))
   const expanded = await read($, expandedAtom)
-  const queue: string[] = [start]
+  const queue: string[] = walkIgnored || !ignored.has(`${start}/`) ? [start] : []
   let batch: Record<string, DirListing> = {}
   let seen = 0
   const flush = async () => {
@@ -307,8 +330,9 @@ const reconcile = async ($: Dollar, root: string, extra: Iterable<string>): Prom
     if ((state === 'untracked' || state === 'added') && !has) todo.add(dir)
     if (state === 'deleted' && has) todo.add(dir)
   }
-  for (const dir of todo) {
-    if (dir !== '' && !dirs[parentOf(dir)]) continue
+  const toList = [...todo].filter(dir => dir === '' || dirs[parentOf(dir)])
+  if (toList.length > 0) await rereadIgnored($, root)
+  for (const dir of toList) {
     const listing = await listDir($, root, dir)
     if (!listing) {
       await update($, dirsAtom, all => {
@@ -338,8 +362,9 @@ const refresh = async ($: Dollar, opts: { walk: boolean; dirs?: Iterable<string>
     await update($, offsetAtom, () => 0)
     shouldWalk = true
   }
-  const view = await read($, viewAtom)
-  const git = await readGit($, root, view !== 'tree')
+  if (shouldWalk) gitPrefix = undefined // a full refresh asks git again where the root sits
+  const under = viewUnder(await read($, viewAtom), await read($, previewAtom))
+  const [git] = await Promise.all([readGit($, root, under !== 'tree'), shouldWalk ? rereadIgnored($, root) : undefined])
   await update($, gitAtom, () => git)
   if (shouldWalk) await walkAll($, root)
   else await reconcile($, root, opts.dirs ?? [])
@@ -482,12 +507,13 @@ type View = {
 
 /** Reads the session state and lays the pane's lines out, top to bottom, for the view in force; a read while drawing subscribes the pane. */
 const loadView = async ($: StateDollar, now: number): Promise<View> => {
-  const [root, dirs, collapsed, expanded, git, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, peekDiff, focused, anim] = await Promise.all([
+  const [root, dirs, collapsed, expanded, git, ignored, active, trail, showIgnored, walkDone, view, filter, focusMode, peek, peekDiff, focused, anim] = await Promise.all([
     read($, rootAtom),
     read($, dirsAtom),
     read($, collapsedAtom),
     read($, expandedAtom),
     read($, gitAtom),
+    read($, ignoredAtom),
     read($, activeAtom),
     read($, trailAtom),
     read($, showIgnoredAtom),
@@ -550,7 +576,7 @@ const loadView = async ($: StateDollar, now: number): Promise<View> => {
     ...foldRules(collapsed, expanded, focusMode),
     hidden: cfg.hiddenFolders,
     showIgnored,
-    ignored: new Set(git.ignored),
+    ignored: new Set(ignored),
     compactFolders: cfg.compactFolders,
     dirCounts: git.dirCounts,
     deleted: new Set(pathsIn(git.files, 'deleted')),
@@ -1929,7 +1955,7 @@ export const register: Register = (on, options) => {
     try {
       return await next(e)
     } finally {
-      scheduleRefresh($)
+      scheduleRefresh($, '') // a command can change anything, a .gitignore or the branch among them: listing the root asks git again what it ignores
     }
   }).catch(($, e, next) => next(e))
 
