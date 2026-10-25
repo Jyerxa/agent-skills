@@ -1,54 +1,28 @@
 {
   "name": "enrich",
-  "version": "0.2.0",
-  "description": "In progress: Improve a draft prompt in place: ctrl+x e runs a quick pass that tidies it, ctrl+x d a deep pass that reads the conversation and restructures it. The same chord puts your original back.",
+  "version": "0.3.0",
+  "description": "In progress: ctrl+x r sends your draft prompt to Claude (Sonnet 5.5 by default) and puts it back rewritten for clarity. Press it again to restore your original.",
   "author": { "name": "jeremiah" },
   "types": "./types/index.d.ts",
   "userConfig": {
-    "quickModel": {
+    "model": {
       "type": "string",
-      "title": "Quick-pass model",
-      "description": "The model the quick pass runs on: an alias (sonnet, haiku, opus) or a full model id.",
-      "default": "sonnet"
+      "title": "Model",
+      "description": "The model that rewrites your draft: an alias (sonnet, haiku, opus) or a full model id.",
+      "default": "claude-sonnet-5-5"
     },
-    "quickEffort": {
+    "effort": {
       "type": "string",
-      "title": "Quick-pass effort",
-      "description": "How hard the quick pass thinks. low keeps it to a few seconds.",
+      "title": "Effort",
+      "description": "How hard the model thinks. low keeps a rewrite to a few seconds.",
       "options": ["low", "medium", "high", "xhigh", "max"],
       "default": "low"
     },
-    "deepFallbackModel": {
+    "instructions": {
       "type": "string",
-      "title": "Deep-pass fallback model",
-      "description": "The deep pass reads the conversation through a fork of the session, on the session's own model. Before there is a conversation (a new session, or just after /clear) it runs on this model instead.",
-      "default": "opus"
-    },
-    "timeoutMs": {
-      "type": "number",
-      "title": "Timeout (ms)",
-      "description": "Give up on a pass after this long; your draft stays as it was.",
-      "default": 90000
-    },
-    "houseStyle": {
-      "type": "boolean",
-      "title": "House style",
-      "description": "Add your standing preferences to both passes: ~/.claude/enrich.md (yours) and .claude/enrich.md in the project (wins where they conflict).",
-      "default": true
-    },
-    "quickAction": {
-      "type": "string",
-      "title": "Quick-pass action",
-      "description": "The engine keybinding action the quick-pass chord (ctrl+x e) is bound to. Plugins cannot register their own actions, so the chord borrows one whose only handler lives inside the diff dialog. Change it only if a Claude Code update breaks the default.",
-      "options": ["diff:back", "diff:nextSource", "diff:previousSource", "diff:previousFile", "diff:nextFile"],
-      "default": "diff:back"
-    },
-    "deepAction": {
-      "type": "string",
-      "title": "Deep-pass action",
-      "description": "The engine keybinding action the deep-pass chord (ctrl+x d) is bound to; see Quick-pass action. It must differ from it.",
-      "options": ["diff:nextSource", "diff:back", "diff:previousSource", "diff:previousFile", "diff:nextFile"],
-      "default": "diff:nextSource"
+      "title": "Rewrite instructions",
+      "description": "How the model rewrites your draft. Edit or replace them to set your own style, such as \"Add success criteria as a checklist.\" Whatever they say, @mentions, paths and code stay exactly as written, and the reply is only the rewritten prompt. Clear the field to go back to the default.",
+      "default": "Rewrite it for clarity. Fix spelling and grammar. Make the ask explicit: what to do, and to what. Turn several separate asks into a short list; otherwise keep prose. Keep the author's voice, terms and hedges (\"maybe\", \"not sure\"). Add nothing the draft doesn't say: no new requirements, files or names."
     }
   }
 }
