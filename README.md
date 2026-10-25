@@ -99,6 +99,8 @@ Every skill is a folder under `skills/` containing a `SKILL.md` (name,
 description, and version/lifecycle metadata, then the instructions) and any
 supporting reference files. That layout is the whole distribution mechanism — `npx skills` reads it
 directly from this repo.
+Each skill installs on its own, so nothing in a skill may link outside its
+own folder. [`AGENTS.md`](AGENTS.md) has the full rule.
 
 ```
 skills/
