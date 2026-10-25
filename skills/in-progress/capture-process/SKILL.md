@@ -2,7 +2,7 @@
 name: capture-process
 description: 'In progress: Interview a domain practitioner to faithfully capture an existing or envisioned business process: its purpose, language, actors, objects, actions, relationships, lifecycle, and rules. Use to understand business operations, including manual work, before visualization, process improvement, or software design. This skill describes the process; it does not redesign it or prescribe an implementation.'
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 

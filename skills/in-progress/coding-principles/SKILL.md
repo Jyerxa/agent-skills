@@ -2,7 +2,7 @@
 name: coding-principles
 description: 'In progress: Coding principles for agents. Use when writing, changing, reviewing, debugging, or designing code. Gives the core rules now and names topic files to read only when the work needs them.'
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 

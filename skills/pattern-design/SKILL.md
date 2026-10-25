@@ -2,7 +2,7 @@
 name: pattern-design
 description: 'Turn a system design spec or PRD into a disciplined pattern-based design: which patterns to apply, where, and why, plus repo-ready agent instructions that enforce the design. Use when the user wants to design a system with design patterns (GoF or other catalogs), asks "which patterns should I use for this spec", or wants pattern-enforcement rules generated for coding agents. Input: a spec/PRD file path or pasted text.'
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 

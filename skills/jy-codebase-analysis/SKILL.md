@@ -2,7 +2,7 @@
 name: jy-codebase-analysis
 description: 'Deep, evidence-backed analysis of an existing codebase that produces four Markdown artifacts: a business overview and a business-logic catalog (for product managers on brownfield projects, with calculations and formulas recorded as business rules), plus an architecture overview with Mermaid diagrams and a layer-by-layer engineering-patterns report (for architects and developers). An orchestrator surveys the repo, then fans out subagents that read every file line by line. Use when the user wants to understand, document, onboard onto, or reverse-engineer what a codebase does and how it is built. Works in Claude Code, Cursor, Codex, and GitHub Copilot, with a sequential fallback when subagents are unavailable.'
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 

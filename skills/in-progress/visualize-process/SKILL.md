@@ -2,7 +2,7 @@
 name: visualize-process
 description: 'In progress: Turn a captured business process into a cinematic, interactive HTML journey with expressive 3D scenes, choreographed camera movement, progressive discovery, and inspectable evidence. Use to explain a process model through an ambitious visual experience, not to capture missing facts, redesign the process, or simulate invented behavior.'
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 
