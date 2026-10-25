@@ -11,7 +11,7 @@ Write how the code will be called (arguments, results, errors) before implementi
 Use when: creating a function, API, command, or module.
 
 ## Define the contract before both sides
-When two components must talk, define the shared type, schema, or interface first, with one source of truth. Then implement each side against it. Do not write one side and bend the other with adapters.
+When two components must talk, define the shared type, schema, or interface first, with one source of truth. Then implement each side against it. Do not write one side first and then force the other to fit with adapters.
 
 Use when: building a producer and consumer, a client and server, or any seam between components.
 
@@ -23,7 +23,7 @@ Use when: defining or reviewing a public interface.
 ## Expose less
 Callers come to rely on anything observable. Return only what callers need. Do not expose internals, extra fields, or incidental ordering.
 
-Use when: adding a field, method, flag, or output to a public surface.
+Use when: adding a field, method, flag, or output to a public interface.
 
 ## Add an interface only at a real seam
 Introduce an interface or abstraction only at a real seam: an external system, a boundary you test across, or a second implementation that exists today. Otherwise call the concrete code.

@@ -1,99 +1,99 @@
-# Output Templates
+# Output templates
 
-Two artifacts are generated per run. Fill every `<placeholder>`; delete
-sections only when genuinely empty (and say so — "None." beats silence).
-Keep the system's domain vocabulary throughout: participants are named
+Each run generates two artifacts. Fill every `<placeholder>`. Delete a section
+only when it has no content, and say so. Writing "None." is better than
+silence. Use the system's domain vocabulary throughout. Name participants
 `PaymentGateway` and `ExportRenderer`, never `ConcreteStrategyA`.
 
 ---
 
-## Template 1 — Pattern Design Document
+## Template 1: pattern design document
 
 Default path: `docs/design/pattern-design.md`
 
 ```markdown
-# Pattern Design: <System Name>
+# Pattern design: <System Name>
 
 **Source spec**: <path or reference, with version/date if available>
 **Target stack**: <language / framework>
-**Catalogs consulted**: <e.g., GoF>
+**Catalogs consulted**: <for example, GoF>
 **Date**: <date>
 
-## 1. Forces Inventory
+## 1. Forces inventory
 
 | ID | Force | Spec citation | Volatility |
 |----|-------|---------------|------------|
 | F1 | <one-line pressure on the design> | <quoted line or §ref> | stated / implied / speculative |
 
-## 2. Pattern Map
+## 2. Pattern map
 
 | Force | Decision | Location | Participants |
 |-------|----------|----------|--------------|
-| F1 | <Pattern name, or "no pattern — plain <solution>"> | <module/dir path> | <domain-named interfaces & types> |
+| F1 | <Pattern name, or "no pattern, plain <solution>"> | <module/dir path> | <domain-named interfaces & types> |
 
-## 3. Pattern Applications
+## 3. Pattern applications
 
 ### <Pattern Name> for F<n>: <force one-liner>
 
 - **Why this pattern**: <one paragraph: the force, why the plain solution
   falls short, why this is the simplest sufficient pattern>
-- **Participants**: <role → domain name → file path>
+- **Participants**: <each role, its domain name, and its file path>
 - **Collaborations**: <how it connects to neighboring patterns/components>
-- **Boundary it protects**: <what change this contains, e.g. "adding a
+- **Boundary it protects**: <what change this contains, for example "adding a
   provider touches only src/gateways/">
 
 <!-- repeat per application -->
 
-## 4. Key Flows
+## 4. Key flows
 
-### <Flow name, e.g. "Order placement">
+### <Flow name, for example "Order placement">
 
-<Short numbered sequence showing the selected patterns cooperating on a
+<Short numbered sequence showing how the selected patterns interact in a
 real flow from the spec.>
 
-## 5. Rejection Log
+## 5. Rejection log
 
 | Candidate | Considered for | Rejected because |
 |-----------|----------------|------------------|
-| <Pattern> | F<n> | <one line — e.g. "two variants, no growth signal; plain if"> |
+| <Pattern> | F<n> | <one line, for example "two variants, no growth signal; plain if"> |
 | <Pattern> | F<n> (speculative) | <YAGNI: variation not stated in spec> |
 
-## 6. Open Questions
+## 6. Open questions
 
-<Ambiguities in the spec that forced an assumption; each with the
-assumption made. "None." if none.>
+<Each ambiguity in the spec that forced an assumption, with the assumption
+made. "None." if none.>
 ```
 
 ---
 
-## Template 2 — Agent Instructions (pattern rules)
+## Template 2: agent instructions (pattern rules)
 
-Default path: `docs/design/pattern-rules.md`, referenced from the target
-repo's `CLAUDE.md`.
+Default path: `docs/design/pattern-rules.md`, which the target repo's
+`CLAUDE.md` references.
 
-Rule quality bar: imperative, scoped to paths, checkable from a diff alone,
-and traceable (each rule cites its design-doc section). No rationale essays
-here — rationale lives in the design doc; this file is operational.
+Each rule is imperative, scoped to paths, checkable from a diff alone, and
+traceable, citing its design-doc section. Keep rationale in the design doc.
+This file says what to do, not why.
 
 ```markdown
-# Pattern Rules: <System Name>
+# Pattern rules: <System Name>
 
 Agent instructions for implementing and preserving the pattern design in
 [pattern-design.md](./pattern-design.md). Follow these when writing or
 reviewing code in this repo. Each rule cites the design decision it
-enforces — read it before deviating, and if a rule must change, update the
-design doc in the same PR.
+enforces. Read that decision before deviating, and if a rule must change,
+update the design doc in the same PR.
 
 ## Architecture rules
 
-### R1 — <short rule name> (per design §3.<n>)
+### R1: <short rule name> (per design §3.<n>)
 
 - **Rule**: <imperative, path-scoped. "Every export format implements
-  `ExportRenderer` in `src/export/renderers/` and is registered in
+  `ExportRenderer` in `src/export/renderers/` and has an entry in
   `src/export/registry.ts`.">
-- **When adding a new <thing>**: <numbered recipe an agent can follow —
+- **When adding a new <thing>**: <numbered recipe an agent can follow:
   files to create, where to register, what to name it, what tests to add>
-- **Forbidden**: <the shortcut that erodes the pattern — "a switch on
+- **Forbidden**: <the shortcut that violates the pattern, for example "a switch on
   format type anywhere outside the registry">
 
 <!-- repeat per rule; one rule per pattern application, more if a pattern
@@ -101,8 +101,8 @@ design doc in the same PR.
 
 ## Deliberately NOT used
 
-<From the rejection log — the entries agents are most likely to
-"helpfully" reintroduce.>
+<The rejection-log entries that agents are most likely to "helpfully"
+reintroduce.>
 
 - Do not introduce <pattern> for <area>: <one-line reason>. If the spec
   changes to warrant it, update pattern-design.md first.
@@ -111,7 +111,7 @@ design doc in the same PR.
 
 Before committing changes in this repo, verify:
 
-- [ ] <checkable item per rule, e.g. "No `new StripeClient` outside
+- [ ] <checkable item per rule, for example "No `new StripeClient` outside
       src/gateways/">
 - [ ] <...>
 - [ ] Any change that violates a rule above updates
@@ -127,7 +127,7 @@ Append to the target repo's `CLAUDE.md` (create it if absent):
 
 This codebase follows a pattern design documented in
 `docs/design/pattern-design.md`. The rules in `docs/design/pattern-rules.md`
-are binding when writing or reviewing code — read them before making
+are binding when writing or reviewing code. Read them before making
 structural changes.
 ```
 

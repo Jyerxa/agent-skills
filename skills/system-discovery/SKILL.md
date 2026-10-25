@@ -6,14 +6,14 @@ metadata:
   lifecycle: "in-progress"
 ---
 
-# System Discovery
+# System discovery
 
-Help the user articulate what they want to build. Produce a concise system
+Help the user describe what they want to build. Produce a concise system
 brief that gives later design work enough evidence to reason about module
 boundaries and invariants.
 
-The finish line is a shared understanding of the system's intended behavior.
-Keep architecture choices for the design stage: capture an existing technical
+The goal is a shared understanding of the system's intended behavior. Keep
+architecture choices for the design stage. Capture an existing technical
 constraint when it matters, but leave new module layouts, patterns, schemas,
 and implementation plans out of this interview.
 
@@ -25,7 +25,7 @@ Distinguish what it does today from what the user wants it to do. Reuse answers
 already given; a supplied brief may need only a few clarifications.
 
 If the idea itself is missing, begin with: "What do you want to build?"
-Otherwise, briefly reflect your current understanding and ask about the most
+Otherwise, briefly restate your current understanding and ask about the most
 consequential gap.
 
 ## Interview loop
@@ -37,14 +37,14 @@ consequential gap.
    and concrete situations. Treat the coverage map below as a guide for
    choosing questions, not a questionnaire to present or exhaust.
 3. When the user faces a tradeoff, explain the practical difference and offer
-   a recommendation grounded in what they have said. Leave factual questions
+   a recommendation based on what they have said. Leave factual questions
    open; a suggested answer must not become an invented requirement.
 4. Follow vague or conflicting answers with a concrete example. For "manage
    bookings," find out what someone actually does and what happens next. For
    "it must be fast," discover which activity suffers and what delay matters.
 5. Update the working understanding and choose the next question from it.
    Briefly recap when an answer changes the scope or resolves a contradiction.
-   A correction supersedes the earlier answer; remove stale claims from the
+   A correction replaces the earlier answer; remove stale claims from the
    eventual brief.
 
 "I don't know" is a valid answer. Explain the consequence if useful, record
@@ -63,12 +63,13 @@ recommendation on the user's behalf.
 | System responsibilities | What this system handles, what people or external systems handle, and the information exchanged between them. These describe the system's scope, not internal modules. |
 | Business rules | Known conditions that must hold, actions that must be prevented, and why violations matter. Record the rule itself; enforcement mechanisms come later. |
 | Scope | What the first useful version includes, what is explicitly excluded, and which future ideas are tentative. |
-| Constraints | Existing commitments that affect design: integrations, operating environment, data sensitivity, scale, latency, availability, team, or delivery limits. Explore only what is material; unknown numbers stay unknown. |
+| Constraints | Existing commitments that affect design: integrations, operating environment, data sensitivity, scale, latency, availability, team, or delivery limits. Explore only what is material, and record unknown numbers as unknown. |
 
-Depth should follow consequence. A personal script might need one workflow
-and a few rules. A shared booking service may need ownership, conflicts, and
-cancellations clarified. Pursue an exception when it changes responsibility,
-scope, or a core promise; defer details that only affect implementation.
+Go deeper where answers have larger consequences. A personal script might
+need one workflow and a few rules. A shared booking service may need
+ownership, conflicts, and cancellations clarified. Pursue an exception when it
+changes responsibility, scope, or a core promise; defer details that only
+affect implementation.
 
 ## Stop when design can begin
 
@@ -84,7 +85,7 @@ End the questioning when you can explain, without inventing product decisions:
 This is a readiness check, not a demand to settle every possible requirement.
 If an unknown could change the primary user, main workflow, system scope, or
 a core business promise, clarify it or explicitly mark the brief provisional.
-Detail that can safely be deferred should not prolong the interview.
+Do not prolong the interview for detail that can safely wait.
 
 If the user asks to stop or save early, capture a partial brief with the
 remaining questions. On resumption, read it and continue from those gaps.
@@ -107,17 +108,16 @@ do not fabricate source references or turn observations into requirements.
 Present the written draft and ask for one accuracy check: "Does this capture
 the system you want to build, or is anything important wrong or missing?"
 Apply corrections and mark it confirmed only when the user affirms it.
-User confirmation and readiness for design are separate: a user can confirm
+User confirmation and readiness for design are separate. A user can confirm
 an accurate account that still contains a fundamental open question.
 
 Hand off the brief with any questions that affect later module- and invariant-design work.
 The brief is usable without any other skills installed. This skill ends at the
-brief; continue into design or implementation only when that work is included
-in the user's request.
+brief; continue into design or implementation only when the user's request
+includes that work.
 
 ## Origin
 
-Inspired by Matt Pocock's [grill-me](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md)
-and its [grilling workflow](https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md).
-This adaptation narrows the interview to system discovery and adds a durable
-brief and an explicit stopping point.
+Inspired by Matt Pocock's grill-me skill and its grilling workflow. This
+adaptation narrows the interview to system discovery and adds a saved brief
+and an explicit stopping point.

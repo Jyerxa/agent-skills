@@ -6,7 +6,7 @@ metadata:
   lifecycle: "in-progress"
 ---
 
-# Capture Process
+# Capture a process
 
 Turn what a practitioner knows into a concise, evidence-linked process model
 that another person or agent can use without the interview transcript. Be an
@@ -28,13 +28,12 @@ Establish the process's purpose, start and end, relevant context, and mode:
 - **ENVISIONED:** how the practitioner currently intends work to happen.
   Capture that intent faithfully without presenting it as existing behavior.
 
-Use ordinary tense and context to establish mode: an account of how work is
-handled today is EXISTING; a process the user plans but has not started is
-ENVISIONED. Do not spend a turn reconfirming clear intent. Ask when the mode
-is genuinely ambiguous. If the conversation mixes today and a future idea,
-separate the accounts and link
-them. Do not quietly switch modes. A tentative suggestion is not an agreed
-part of the envisioned process.
+Establish mode from ordinary tense and context. An account of how work happens
+today is EXISTING; a process the user plans but has not started is ENVISIONED.
+Do not spend a turn reconfirming clear intent. Ask only when the mode is
+unclear. If the conversation mixes today and a future idea, separate the
+accounts and link them. Do not quietly switch modes. A tentative suggestion is
+not an agreed part of the envisioned process.
 
 Use the user's requested scope. If it is unclear, ask what begins the work
 and what outcome finishes it. A business process can involve people, paper,
@@ -47,8 +46,8 @@ proposed application's boundaries.
    example. For ENVISIONED, walk through a representative intended example.
 2. Maintain a working model and a short set of consequential gaps. Choose
    the next question whose prerequisites are known and whose answer most
-   changes the understanding. Default to one focused question, particularly
-   on voice. Batch only a few genuinely independent questions when helpful.
+   changes the understanding. Default to one focused question, especially on
+   voice. Batch a few questions only when they are independent of each other.
 3. Ask in the practitioner's language. Prefer "What happens next?", "Who
    decides?", and "What would make this the same case?" over DDD terminology.
 4. Test vague words with examples and counterexamples. "Manage requests"
@@ -56,9 +55,10 @@ proposed application's boundaries.
    needs the affected activity, not an invented numeric target.
 5. Resolve contradictions neutrally: "Earlier you described X; this case
    seems to show Y. What explains the difference?" Preserve unresolved
-   accounts and their sources rather than choosing the tidiest story.
+   accounts and their sources rather than choosing the most convenient one.
 6. Briefly reflect important discoveries and corrections. Update the model,
-   then select the next useful question instead of reading a questionnaire.
+   then select the next useful question instead of working through a fixed
+   questionnaire.
 
 Do not suggest a recommended factual answer or word questions so "yes"
 accepts your design. Neutral alternatives can clarify an already ambiguous
@@ -90,16 +90,18 @@ Use these lenses as needed, not as boxes to fill:
 - **Rules and constraints:** prerequisites, permissions, forbidden outcomes,
   invariants, decisions, calculations, timing, and resource limits.
 
-Explore depth in proportion to consequence. For a calculation that materially
-affects the process, capture units, boundaries, rounding, and a worked example
-when established. Missing values remain unknown. Do not invent rules to make
-a diagram executable or exhaust every theoretical edge case.
+Ask for more detail where more depends on the answer. For a calculation that
+materially affects the process, capture units, boundaries, rounding, and a
+worked example when established. Missing values remain unknown. Do not
+invent rules to make a diagram executable or exhaust every theoretical edge
+case.
 
-The DDD lens is conceptual: preserve shared domain language and its context;
-investigate whether identity matters or meaning lies in values; distinguish
-an action from a meaningful event and a lifecycle state. A consistency
-boundary may be a candidate aggregate only when an actual invariant supports
-it. Label such classifications as interpretations until validated.
+Use the DDD lens for concepts, not implementation. Preserve shared domain
+language and its context. Investigate whether identity matters or meaning
+lies in values. Distinguish an action from a meaningful event and from a
+lifecycle state. A consistency boundary may be a candidate aggregate only
+when an actual invariant supports it. Label such classifications as
+interpretations until validated.
 
 Not every noun is an entity, not every department is a bounded context, and
 not every group of objects is an aggregate. Record business consistency needs
@@ -126,7 +128,7 @@ and continue from those gaps. Preserve stable IDs and the revision history.
 When corrections alter an account already used downstream, preserve its
 prior revision and identify what supersedes it.
 
-## Finish with fidelity, not exhaustion
+## Finish when the model is reviewable
 
 The model is reviewable when you can explain its purpose and boundaries,
 principal participants and terms, a main trigger-to-outcome scenario, and
@@ -146,10 +148,10 @@ Before delivery:
   `python scripts/validate_model.py <process.md>` relative to this skill.
   This checks structure, not truth; still perform the evidence review.
 
-Present the saved model with its important gaps and ask one accuracy check
-(defer this if the user asked to stop):
+Present the saved model with its important gaps and ask one accuracy check:
 "Does this faithfully describe the process, or is anything important wrong
-or missing?" Mark agreement user-confirmed only after an affirmative answer.
+or missing?" Defer the check if the user asked to stop. Mark agreement
+user-confirmed only after an affirmative answer.
 Confirmation does not resolve unknowns or authorize later work.
 
 End at the capture. Its model can be consumed without any other skill
@@ -159,12 +161,9 @@ implementation are separate tasks, pursued only when requested.
 
 ## Sources
 
-The dependency-aware interview is inspired by Matt Pocock's
-[grill-me](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md)
-and [grilling](https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md).
-These instructions are independently written and intentionally use neutral
-questions and a bounded stopping point.
+Matt Pocock's grill-me and grilling skills inspired the dependency-aware
+interview. These instructions are written independently and deliberately use
+neutral questions and a bounded stopping point.
 
-The modeling lens draws on Eric Evans's
-[Domain-Driven Design Reference](https://www.domainlanguage.com/ddd/reference/).
-Use its concepts to clarify meaning, not as a mandatory implementation catalog.
+The modeling lens draws on Eric Evans's Domain-Driven Design Reference. Use
+its concepts to clarify meaning, not as a mandatory implementation catalog.

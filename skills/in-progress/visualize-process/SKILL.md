@@ -8,9 +8,9 @@ metadata:
 
 # Visualize a process
 
-Make the viewer curious, then take them somewhere. Deliver a portable HTML
-experience that creates surprise, delight, and excitement while making the
-process easier to understand. This ambition applies to every subject,
+Make the viewer curious, then show them how the process works. Deliver a
+portable HTML experience that surprises and delights the viewer while making
+the process easier to understand. This ambition applies to every subject,
 including routine operations, abstract policies, and sparse or partial models.
 The material determines the visual world; it does not lower the design bar.
 
@@ -19,7 +19,7 @@ Use Three.js by default, with expressive 3D models, composition, lighting,
 object choreography, and purposeful camera movement. A static card grid with
 glowing selections, a long information page, or flat panels given shallow
 extrusion does not meet this brief. Loading Three.js is not evidence of design.
-Keep factual meaning faithful while being imaginative about how it is staged.
+Keep the facts faithful and stage them imaginatively.
 
 ## Read the baseline
 
@@ -43,35 +43,37 @@ Read [presentation-plan.md](references/presentation-plan.md) for the distinction
 between a visual storyboard and the evidence-linked presentation plan.
 Before implementation, choose an art direction and sketch the journey:
 
-- **Invitation:** a striking opening composition, a short promise, and an
-  obvious way to begin. Give the viewer a reason to care before exposing detail.
-- **Discovery:** reveal the process through changing scenes, perspectives,
+- **Invitation.** A striking opening composition, a short promise, and an
+  obvious way to begin. Give the viewer a reason to care before showing detail.
+- **Discovery.** Reveal the process through changing scenes, perspectives,
   scale, and interactions. Each beat introduces one idea and builds on the last.
-- **Reveal:** a memorable visual discovery that makes a supported relationship,
-  decision, constraint, or uncertainty click. Earn surprise through understanding.
-- **Resolution:** bring the parts together in a new, legible view of the whole,
+- **Reveal.** A memorable visual discovery that helps the viewer grasp a
+  supported relationship, decision, constraint, or uncertainty. The surprise
+  must come from understanding something, not from effects.
+- **Resolution.** Bring the parts together in a new, legible view of the whole,
   with the key takeaway and an invitation to explore evidence or another case.
 
 Adapt this arc to the material; it is not a fixed chapter count or a template
 of identical scenes. Write down each beat's learning point, source basis,
 visual subject, object motion, camera move, settled composition, and interaction.
 Design the transitions as carefully as the destinations. If the storyboard
-is merely “highlight the next card and replace its paragraph,” redesign it.
+only highlights the next card and replaces its paragraph, redesign it.
 
 Choose a distinctive visual language: a physical world, an abstract sculptural
 system, a cutaway, a landscape, an instrument, or another coherent metaphor.
 Use custom geometry or available models to give the important concepts form.
 Let objects assemble, separate, unfold, expose their interior, or change scale
 when that staging helps reveal an idea. Plan camera travel from context to
-detail and back: dolly, orbit, track, or pass through a reveal with intention.
-Keep orientation through persistent landmarks, object identity, and continuity.
-Settle the camera for reading and interaction; avoid perpetual orbiting.
+detail and back. Give each dolly, orbit, track, or pass through a reveal a
+purpose. Keep orientation through persistent landmarks, object identity, and
+continuity. Settle the camera for reading and interaction; avoid perpetual
+orbiting.
 
-Artistic staging is allowed without a source citation for every aesthetic
-choice. A metaphor's colors, materials, geometry, and camera route are
-presentation choices. Any implied business relationship, quantity, timing,
-authority, state, or outcome still needs evidence. Make the distinction clear
-when a metaphor could otherwise be mistaken for a literal process model.
+Artistic staging needs no source citation for each aesthetic choice. A
+metaphor's colors, materials, geometry, and camera route are presentation
+choices. Any implied business relationship, quantity, timing, authority,
+state, or outcome still needs evidence. Make the distinction clear when a
+viewer could mistake a metaphor for a literal process model.
 
 ## Reveal information progressively
 
@@ -82,11 +84,11 @@ and introduce them when they become relevant. Stage detail across beats rather
 than shrinking type or stacking panels to fit everything on screen.
 
 Keep record inventories, long descriptions, source fields, hashes, and full
-Markdown in an intentional “Explore evidence” drawer or separate secondary
+Markdown in an intentional "Explore evidence" drawer or separate secondary
 view, closed initially. Evidence must be easy to reach from the active object
-or claim without becoming the default reading task. Do not append a wall of
+or claim without becoming the default reading task. Do not append a long run of
 record cards underneath the journey. Keep essential qualifications visible
-at the point they matter, such as “illustrative order” or “outcome unknown”;
+at the point they matter, such as "illustrative order" or "outcome unknown";
 put the complete explanation behind inspection instead of repeating caveats.
 
 Use cases, flows, sequences, roadmaps, concepts, or uncertainty as lenses when
@@ -117,14 +119,14 @@ comparison, or improved process unless the user provides or requests one.
 
 Build or customize a Three.js presentation around the storyboard. Use readable
 HTML labels and controls alongside the scene. Make depth, models, lighting,
-and camera movement materially visible; use composition and motion to direct
+and camera movement plainly visible; use composition and motion to direct
 attention rather than relying on color changes alone. Provide responsive scene
 layouts and camera framing, not just a scaled-down desktop canvas.
 
 Bundle the chosen Three.js build and required assets into the HTML, preserving
 licenses, so the result works offline without CDN requests. Prefer procedural
-models when they can express the concept well; elaborate asset acquisition is
-not a prerequisite for a compelling world. A user constraint or a demonstrated
+models when they can express the concept well; a compelling world does not
+require elaborate asset acquisition. A user constraint or a demonstrated
 technical limitation can justify SVG/HTML/CSS as the main implementation;
 retain the same journey, progressive disclosure, and design ambition. Provide
 a usable HTML/SVG equivalent when WebGL is unavailable.
@@ -138,8 +140,8 @@ Honor reduced motion in both JavaScript and CSS: show equivalent settled scenes,
 manual transitions, and complete meaning without movement. Avoid flashing,
 forced scroll hijacking, and endless decorative animation.
 
-The bundled Python generator is an **inspection scaffold and technical
-fallback**, not the visual target or the normal final deliverable:
+The bundled Python generator builds an inspection page and a technical
+fallback. It is not the visual target or the normal final deliverable:
 
 ```bash
 python3 <skill-dir>/scripts/render_process.py process.md --write-view process.view.json
@@ -166,27 +168,27 @@ Evaluate the design before calling a working page finished. Watch the complete
 journey at normal speed, including transitions, and inspect a filmstrip of its
 major beats. Use these acceptance criteria:
 
-- **Invitation:** the first viewport has a compelling visual subject and a
+- **Invitation.** The first viewport has a compelling visual subject and a
   clear way in; it does not ask the viewer to study a dashboard or document.
-- **Transformation:** the journey changes composition, scale, or perspective
-  meaningfully. If the filmstrip is the same arrangement with different text
+- **Transformation.** The journey makes real changes to composition, scale, or
+  perspective. If the filmstrip is the same arrangement with different text
   and highlights, it fails even if Three.js is present.
-- **Visual explanation:** with long prose hidden, the scenes still communicate
+- **Visual explanation.** With long prose hidden, the scenes still communicate
   the central ideas. Model transformations and camera moves reveal something
-  understandable; they are not merely ornamental transitions between paragraphs.
-- **Surprise and payoff:** identify the specific reveal that rewards curiosity
+  understandable; they are not ornamental transitions between paragraphs.
+- **Surprise and payoff.** Identify the specific reveal that rewards curiosity
   and what it helps the viewer understand. Generic fades, glows, and card
   entrances alone do not satisfy this criterion.
-- **Restraint in information:** one focal idea leads each beat; evidence and
+- **Restraint in information.** One focal idea leads each beat; evidence and
   complete records are available on demand. Labels remain readable while the
   scene moves and after it settles.
-- **Fidelity and agency:** artistic staging preserves the source's limits,
+- **Fidelity and agency.** Artistic staging preserves the source's limits,
   and the viewer can pause, revisit, inspect, or use reduced motion.
 
 If any criterion fails, revise the storyboard or implementation and inspect
-it again. Functional tests cannot waive the design bar. Do not claim delight
-based on subjective certainty; point to concrete composition, motion, and
-interaction choices and actually review their result.
+it again. Passing functional tests does not waive the design bar. Do not claim
+delight based on subjective certainty; point to concrete composition, motion,
+and interaction choices and review their result.
 
 Open the actual output in a browser. Inspect desktop and narrow/mobile pixels;
 exercise navigation, repeated Play/Pause, scenario switching mid-transition,

@@ -1,7 +1,7 @@
 # Simplicity
 
 ## Redesign when the design stops fitting
-When you add or change a requirement, compare the current design with the one you would have built had the requirement existed from the start. If they differ and the redesign is simpler overall, redesign. Do not bolt on a special case. If the redesign reaches beyond the module you are changing, say so before starting.
+When you add or change a requirement, compare the current design with the one you would have built had the requirement existed from the start. If they differ and the redesign is simpler overall, redesign. Do not add a special case to the old design. If the redesign reaches beyond the module you are changing, say so before starting.
 
 Use when: adding or changing any requirement, behavior, or case.
 
@@ -16,7 +16,7 @@ Use the simplest design that meets the stated need. When a design needs special 
 Use when: choosing how to implement, structure, or change code.
 
 ## Minimize reader load
-Minimize what a reader must hold in mind: hidden mutable state, control flow hidden by magic, and layers that add no behavior. Judge by what the reader must track, not by line count.
+Minimize what a reader must hold in mind: hidden mutable state, control flow hidden in conventions or reflection, and layers that add no behavior. Judge by what the reader must track, not by line count.
 
 Use when: designing, writing, or refactoring code, or reviewing your own diff.
 

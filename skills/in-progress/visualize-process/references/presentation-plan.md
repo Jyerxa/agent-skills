@@ -2,7 +2,7 @@
 
 Use the generated plan as an evidence-linked starting point, then choose the
 focus and supported relationships that best explain the user's question.
-The default reading order is not a visual design prescription. This is a
+The default reading order is not a visual design prescription. The plan is a
 renderer input, not a second maintained process model or an improvement
 contract. Regenerate it from the canonical Markdown when meaning changes.
 
@@ -33,11 +33,11 @@ inspect a supported distinction, then the camera could pull back to reveal
 its relationship to the whole. An unknown outcome could become an unfinished
 part of the composition, with its question revealed on approach. These are
 possible visual strategies, not mandatory motifs. Physical arrangement must
-not silently claim a hierarchy, sequence, quantity, or business boundary.
+not imply a hierarchy, sequence, quantity, or business boundary.
 
 Choose a visual world specific to the material. Avoid reusing the same islands,
 tunnels, glowing nodes, or floating cards for every subject. Evidence handling
-is reusable; the art direction and journey deserve fresh decisions.
+is reusable; decide the art direction and journey afresh for each subject.
 
 ## Evidence-linked plan
 
@@ -81,8 +81,8 @@ guided reading, without an invented route to completion.
 
 Basis pointers name existing record IDs and exact field names. The renderer
 shows their original values and source links on inspection. It checks that
-they resolve, not that the prose proves the depicted claim. Trace order must
-be semantically reviewed; link order alone is not sufficient evidence.
+they resolve, not that the prose proves the depicted claim. Review trace order
+against what the source says; link order alone is not sufficient evidence.
 
 ### Choreography in custom viewers
 
@@ -96,7 +96,7 @@ to expose a hidden relationship, or pulling back to recontextualize it. It
 must not look like an actual item's journey unless the source supports that
 journey. Keep a visual landmark or recognizable object across transitions
 so ambitious camera movement remains understandable. Compose each destination
-for reading; motion should lead to it rather than compete with it.
+for reading; motion should arrive there, not distract from it.
 
 Map each explanatory beat to a stable, inspectable state and its basis. Keep
 presentation progress separate from business time, completion, and certainty.
@@ -139,13 +139,13 @@ inspect their accounts separately rather than drawing a settled edge.
 
 ## Boundaries
 
-Unknown plan keys are rejected; there is no free-form executable markup,
-caption, duration, automatic branch decision, or proposed-change input.
-Records and original source text are preserved, with safe internal-link
-rendering. External locators remain text rather than becoming an injection
-or unexpected navigation surface. Omitted scenarios fall back to guided
-readings. No scenarios is valid and leaves the record explorer usable.
+The renderer rejects unknown plan keys; there is no free-form executable
+markup, caption, duration, automatic branch decision, or proposed-change input.
+It preserves records and original source text and renders internal links
+safely. External locators stay plain text, so they cannot inject markup or
+navigate somewhere unexpected. Omitted scenarios fall back to guided
+readings. A plan with no scenarios is valid and leaves the record explorer usable.
 
-The package's contract and structural validator are copies of Process Model
-v1 to keep single-skill installation self-contained. Keep contract copies
+This skill bundles copies of the Process Model v1 contract and structural
+validator so it works when installed alone. Keep contract copies
 byte-identical when deliberately updating that version across the repository.

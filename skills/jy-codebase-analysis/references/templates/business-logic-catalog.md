@@ -6,7 +6,7 @@ plus developers who need to trace a rule to code.
 **Source:** merged mechanically from the findings cards (rules R-…,
 calculations C-…), the Phase 3 conflicts (X-…), and verification results.
 **Do not summarize rules away**: every verified rule and calculation appears
-here. Refuted claims are left out. Corrected claims appear in their corrected
+here. Leave out refuted claims. Corrected claims appear in their corrected
 form.
 
 **Organization:** by **business capability** (for example Origination,
@@ -36,14 +36,14 @@ come last.
 - **Parameters** list hard-coded values and configurable settings separately.
   A hard-coded value can only change with a code change.
 
-## ⚠ Conflicts and inconsistencies
+## Conflicts and inconsistencies
 
 <Every X- item from Phase 3, first, because these need a decision. For each:
 the concept, which implementations disagree and how, the business
 consequence, where each is used, and the question for SMEs. Include
 code-vs-documentation and code-vs-test disagreements here too.>
 
-### X-1 — <concept> is calculated differently in <k> places
+### X-1: <concept> is calculated differently in <k> places
 - **What differs:** ...
 - **Business consequence:** ...
 - **Used where:** ...
@@ -61,7 +61,7 @@ want this table more than anything else.>
 
 <One-paragraph overview of this capability's logic.>
 
-### BL-1 — <Calculation name> *(calculation · high impact)*
+### BL-1: <Calculation name> *(calculation · high impact)*
 
 **In plain terms:** <one or two sentences>
 
@@ -76,11 +76,11 @@ want this table more than anything else.>
 - **Rounding and precision:** ...
 - **Conventions:** <day count, compounding, and so on>
 - **Edge cases:** ...
-- **Worked example:** <inputs → steps → result>
+- **Worked example:** <inputs, the steps, and the result>
 - **Verified:** yes / corrected / sampled-out
 - **Where in code:** `path:start-end` (source: C-004-2) · tests: `path:line`
 
-### BL-2 — <Rule name> *(eligibility · high impact)*
+### BL-2: <Rule name> *(eligibility · high impact)*
 
 **In plain terms:** <one or two sentences>
 

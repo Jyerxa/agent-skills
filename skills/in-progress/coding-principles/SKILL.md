@@ -8,7 +8,7 @@ metadata:
 
 # Coding principles
 
-**Unwritten code is the best code.** Every line carries a cognitive cost to read and a maintenance cost to keep. Ask first whether the task needs new code at all, then add only the lines it cannot work without.
+**Unwritten code is the best code.** Every line costs effort to read and effort to maintain. Ask first whether the task needs new code at all, then add only the lines it cannot work without.
 
 Project instructions and existing code conventions override these principles.
 
@@ -18,13 +18,13 @@ Project instructions and existing code conventions override these principles.
 
 **Simplest design.** Before you change code, read `simplicity.md`. When you add a requirement, ask whether the design would look the same had the requirement always existed. Choose the design that leaves the least for a reader to hold in mind.
 
-**Pure logic, thin wiring.** Whenever possible, keep business logic in pure functions and framework wiring thin, so logic tests without the framework.
+**Pure logic, thin wiring.** Whenever possible, keep business logic in pure functions and framework wiring thin, so you can test the logic without the framework.
 
 **Leave it clean.** Hygiene applies to every change. Before you change code, read `hygiene.md`. Fix small messes in the code you edit, name things for intent, and leave no scratch behind.
 
 **Reuse first.** Before writing a helper or adding a dependency, search the codebase, the standard library, and the dependencies already installed.
 
-**Working is not done.** Make it work, then make it right (simple, clear, correct), then make it fast only if measured. Passing once is the first stage.
+**Working is not done.** Make it work, then make it right (simple, clear, correct), then make it fast only after measuring. Passing once is the first stage.
 
 **Verify before saying done.** Run the real thing and check the real result. A compile, a test you wrote, or your own reading is not proof. Say what you verified and what you did not.
 

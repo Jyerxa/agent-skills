@@ -64,7 +64,7 @@ rule with approval, or automate when evidence supports it. These are lenses,
 not a required menu. Include a credible do-nothing comparison. Do not default
 to automation, assume adoption, or expand into software architecture.
 
-For each worthwhile proposal, make the following practical:
+For each worthwhile proposal, state:
 
 - What problem and evidence justify considering it, and what remains unknown
 - What changes, the mechanism hypothesis, and the affected actors/records
@@ -86,10 +86,10 @@ Save beside the model as `improvements.md`, or at the user's chosen location.
 For an initial pass, use a short assessment and the few strongest options,
 aiming for one sentence per field. Add detail only when needed for a sound
 decision; avoid repeating shared caveats in every field. Do not manufacture
-proposals to fill a quota. With no justified
-change, deliver the baseline anchor, assessment, and next evidence or decision
-needed, with zero proposals. In chat-only work, preserve the same distinctions
-without forcing the user to read metadata.
+proposals to fill a quota. With no justified change, deliver the baseline
+anchor, assessment, and next evidence or decision needed, with zero proposals.
+In chat-only work, preserve the same distinctions without forcing the user to
+read metadata.
 
 Run `python3 <skill-dir>/scripts/validate_proposals.py improvements.md --baseline process.md`
 when Python is available. It checks pins, references, and record shape, not

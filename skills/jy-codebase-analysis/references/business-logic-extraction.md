@@ -1,14 +1,14 @@
-# Business Logic Extraction
+# Business logic extraction
 
 The business logic is **whatever the system decides or computes on the
 business's behalf**. In analytical, financial, pricing, scoring, scheduling,
-and insurance systems, most of it is written as arithmetic and algorithms.
+and insurance systems, most of it takes the form of arithmetic and algorithms.
 A formula for accrued interest, a discounted-cash-flow loop, a weighted
 risk score, or a pro-ration rule is the business logic, even though it looks
-like implementation detail. Your job is to lift it out of the code and state
+like implementation detail. Your job is to extract it from the code and state
 it so a product manager can read it and a developer can verify it.
 
-## Where rules hide
+## Where to look for rules
 
 Look beyond `if` statements in "service" classes:
 
@@ -51,25 +51,26 @@ Rate each rule:
 ## Rule record
 
 ```markdown
-### R-###-n — <short business name>
+### R-###-n: <short business name>
 - **Type / impact:** <type> / <high|medium|low>
 - **Rule (business language):** <one or two sentences a PM would understand.
-  E.g., "A late fee is charged when an installment is more than 10 days past
-  due.">
+  For example, "The system charges a late fee when an installment is more than
+  10 days past due.">
 - **Conditions:** <exact triggering conditions, including boundary
-  inclusivity — "strictly more than 10 calendar days", not "after 10 days">
+  inclusivity, such as "strictly more than 10 calendar days" rather than
+  "after 10 days">
 - **Outcome:** <what the system does>
 - **Exceptions:** <cases where the rule doesn't apply, with citations>
 - **Parameters:** <constants/config the rule depends on, their values, and
-  where they're defined — note if configurable at runtime>
-- **Evidence:** `path:line` — [stated|inferred]
+  where they're defined. Note whether they are configurable at runtime.>
+- **Evidence:** `path:line`, [stated|inferred]
 - **Also asserted by:** <test or doc citations, if any; note disagreements>
 ```
 
 ## Calculation record
 
 ```markdown
-### C-###-n — <short business name, e.g., "Monthly installment amount">
+### C-###-n: <short business name, such as "Monthly installment amount">
 - **Purpose (business language):** <what this number means and who uses it>
 - **Formula:**
   ```
@@ -81,20 +82,21 @@ Rate each rule:
   | P | principal at origination | currency, Decimal | `loan.principal` |
   | r | periodic rate = APR / 12 | rate per month, Decimal | derived |
   | n | number of monthly installments | count | `loan.term_months` |
-- **Constants:** <every literal with its meaning — 12 = months per year>
+- **Constants:** <every literal with its meaning, for example 12 is months
+  per year>
 - **Numeric handling:** <type (float/decimal/integer cents), precision,
   rounding mode and **where** rounding happens (each step vs. final),
   truncation, integer division, overflow/underflow guards>
 - **Conventions:** <day count (30/360, actual/365, actual/actual), compounding
   frequency, nominal vs. effective rate, sign conventions, currency
-  conversion timing, business-day adjustment — whichever apply>
+  conversion timing, and business-day adjustment, whichever apply>
 - **Edge cases:** <zero rate, zero/negative inputs, final-period residuals,
-  leap years, month-end dates, empty collections — and what the code does for
+  leap years, month-end dates, empty collections, and what the code does for
   each (including "unhandled")>
-- **Worked example:** <concrete inputs → step-by-step → output, computed by
-  following the code. E.g., P = 10,000.00, APR = 6%, n = 36 → r = 0.005 →
-  payment = 304.22 (rounded half-even to cents)>
-- **Evidence:** `path:start-end` — [stated|inferred]
+- **Worked example:** <concrete inputs, each step, and the output, computed by
+  following the code. For example, P = 10,000.00, APR = 6%, and n = 36 give
+  r = 0.005 and payment = 304.22 (rounded half-even to cents)>
+- **Evidence:** `path:start-end`, [stated|inferred]
 - **Used by:** <callers/consumers you can see>
 - **Also asserted by:** <tests with concrete numbers, if any>
 ```
@@ -111,8 +113,8 @@ Rate each rule:
 
 ### Numeric subtleties checklist
 
-Check each item for every calculation. They are where two implementations of
-"the same" formula silently disagree:
+Check each item for every calculation. These items are where two
+implementations of "the same" formula disagree without any visible error:
 
 - [ ] Floating point vs. decimal vs. integer minor units (cents)
 - [ ] Rounding mode (half-up, half-even/banker's, floor, ceiling, truncate)
@@ -138,11 +140,12 @@ each concept with more than one implementation, compare them on the formula,
 constants, numeric handling, conventions, and boundaries. Record:
 
 ```markdown
-### X-n — <concept> is computed differently in <k> places
+### X-n: <concept> is computed differently in <k> places
 - **Implementations:** C-004-2 (`path:line`), C-011-1 (`path:line`)
-- **Differences:** <e.g., 30/360 vs. actual/365; half-even vs. half-up>
-- **Business consequence:** <e.g., the portfolio report's accrued interest
-  will not match payoff quotes; divergence grows with balance and period length>
+- **Differences:** <for example, 30/360 vs. actual/365, or half-even vs. half-up>
+- **Business consequence:** <for example, the portfolio report's accrued
+  interest will not match payoff quotes, and the gap grows with balance and
+  period length>
 - **Which one is used where:** <customer-facing vs. internal reporting>
 - **Question for SMEs:** <which one is intended?>
 ```
