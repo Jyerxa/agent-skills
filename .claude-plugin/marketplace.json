@@ -10,7 +10,7 @@
     {
       "name": "enrich",
       "source": "./claude/plugins/in-progress/enrich",
-      "description": "In progress: Improve a draft prompt in place: ctrl+x e tidies it; ctrl+x d interviews you, then writes a structured prompt. The same chord puts your original back."
+      "description": "In progress: ctrl+x r sends your draft prompt to Claude (Sonnet 5.5 by default) and puts it back rewritten for clarity. Press it again to restore your original."
     }
   ]
 }
