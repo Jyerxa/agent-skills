@@ -17,5 +17,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate review fixtures and principle references
+      - name: Validate review fixtures, links, and bundled principles
         run: python3 reviews/in-progress/code-review/check.py

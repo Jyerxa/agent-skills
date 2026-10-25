@@ -2,6 +2,8 @@
 
 Run from any directory: python3 reviews/in-progress/code-review/check.py
 These checks validate the sample's premises, not a reviewer's judgment.
+The skill is installed on its own, so every link must stay inside its folder
+and the bundled principles must match the coding-principles source text.
 """
 
 import re
@@ -13,6 +15,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 SKILL = ROOT / "skills/in-progress/code-review"
+SOURCE = ROOT / "skills/in-progress/coding-principles"
 SAMPLE = SKILL / "fixtures/sample"
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(SAMPLE))
@@ -115,23 +118,32 @@ class PackageIntegrity(unittest.TestCase):
         # A context budget for this skill, never a reviewed-code length rule.
         self.assertLessEqual(len(body.split()), 600)
 
-    def test_bundled_references_and_source_links_resolve(self):
-        documents = [SKILL / "SKILL.md", *sorted((SKILL / "references").glob("*.md"))]
-        source_prefix = "https://github.com/Jyerxa/agent-skills/blob/main/"
-        for document in documents:
+    def test_links_stay_inside_the_skill(self):
+        for document in sorted(SKILL.rglob("*.md")):
             for target in re.findall(r"\]\(([^)]+)\)", document.read_text()):
-                with self.subTest(document=document.name, target=target):
-                    if target.startswith(source_prefix):
-                        relative, _, anchor = target[len(source_prefix):].partition("#")
-                        path = ROOT / relative
-                        self.assertTrue(path.is_file(), target)
-                        if anchor:
-                            headings = re.findall(r"^#+ (.+)$", path.read_text(), re.M)
-                            slugs = [re.sub(r"[^\w -]", "", h.lower()).replace(" ", "-")
-                                     for h in headings]
-                            self.assertIn(anchor, slugs, target)
-                    elif not target.startswith("https://"):
-                        self.assertTrue((document.parent / target).is_file(), target)
+                with self.subTest(document=document.relative_to(SKILL), target=target):
+                    relative, _, anchor = target.partition("#")
+                    path = (document.parent / relative).resolve()
+                    self.assertNotIn(":", relative, "links must be relative")
+                    self.assertTrue(path.is_relative_to(SKILL) and path.is_file(), target)
+                    if anchor:
+                        headings = re.findall(r"^#+ (.+)$", path.read_text(), re.M)
+                        slugs = [re.sub(r"[^\w -]", "", h.lower()).replace(" ", "-")
+                                 for h in headings]
+                        self.assertIn(anchor, slugs, target)
+
+    def test_bundled_principles_match_source(self):
+        source = {}
+        for line in (SOURCE / "SKILL.md").read_text().splitlines():
+            if match := re.match(r"\*\*(.+?)\.\*\* (.+)", line):
+                source[match[1]] = match[2]
+        for reference in (SOURCE / "references").glob("*.md"):
+            source.update(re.findall(r"^## (.+)\n(.+)\n", reference.read_text(), re.M))
+        bundled = re.findall(r"^### (.+)\n(.+)\n", (SKILL / "references/principles.md").read_text(), re.M)
+        self.assertTrue(bundled)
+        for name, text in bundled:
+            with self.subTest(principle=name):
+                self.assertEqual(text, source.get(name), "copy the current source text")
 
     def test_every_reference_is_discoverable(self):
         body = (SKILL / "SKILL.md").read_text()

@@ -56,7 +56,8 @@ For zero-findings calibration, give a fresh reviewer only `sound.py`, the SMS
 path plus its job type, and their corresponding contracts. Expected result:
 no supported findings, with bounded coverage and verification limits.
 
-The standard-library checks in `reviews/in-progress/code-review/check.py`
-validate fixture behavior and source/reference integrity. They do not test
-an LLM's judgment. A blind review run is a separate behavioral evaluation;
+The repository's standard-library maintainer checks, which are not part of
+the installed skill, validate fixture behavior, that every link stays inside
+the skill, and that the bundled principles match their source. They do not
+test an LLM's judgment. A blind review run is a separate behavioral evaluation;
 record what ran, findings, false positives, and limits in the PR.
