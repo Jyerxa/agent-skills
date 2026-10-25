@@ -1,4 +1,4 @@
-# System Brief Template
+# System brief template
 
 Use these sections to capture the interview. Scale their length to the system;
 a small idea may need only a paragraph or a few bullets per section. Replace
@@ -9,7 +9,7 @@ Separate agreement from completeness in the two status fields. For a partial
 brief, list the unanswered discovery questions so another session can resume.
 
 ```markdown
-# System Brief: <Name or working description>
+# System brief: <Name or working description>
 
 **Agreement:** Draft / User-confirmed
 **Design readiness:** Ready to begin / Provisional
@@ -30,7 +30,7 @@ access or responsibility.>
 
 - Included: <Capabilities needed for the initial outcome.>
 - Excluded: <Explicit non-goals.>
-- Possible later: <Tentative ideas, clearly distinguished from commitments.>
+- Possible later: <Tentative ideas, kept separate from commitments.>
 
 ## 4. Main workflows
 
@@ -81,5 +81,5 @@ Record unknown targets explicitly when they matter.>
 - Readiness: <Why design can begin, or which fundamental questions remain.>
 ```
 
-The handoff should reference the findings above rather than duplicate them or
-invent a module map. Leave mechanism choices for the design work that follows.
+Point the handoff to the findings above. Do not duplicate them or invent a
+module map. Leave mechanism choices for the design work that follows.

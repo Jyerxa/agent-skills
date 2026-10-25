@@ -32,10 +32,11 @@ proof of truth or a substitute for keeping the source. Do not normalize the
 source before hashing. When tools cannot calculate a hash, say the pin is
 unverified and do not label the artifact validated.
 
-Begin with a brief assessment: the user's goal and its source (or that it is
-unspecified), scope, main evidence limitations, and the recommended decision
-or conditional options. Reference new user instructions or other sources with
-honest locators; never invent an approval, quotation, or message ID.
+Begin with a brief assessment: the user's goal and its source, or a note that
+the goal is unspecified; the scope; the main evidence limitations; and the
+recommended decision or conditional options. Reference new user instructions
+or other sources with honest locators; never invent an approval, quotation, or
+message ID.
 
 If no proposal is justified yet, say why and what evidence or decision would
 change that. An anchored assessment with no proposal records is valid.

@@ -6,7 +6,7 @@ Encode the real rules in a data structure, not in scattered conditionals. Use a 
 Use when: designing the data model or state for a feature, or writing stateful logic.
 
 ## Make illegal states impossible
-Let the types carry the rules. Use sum types or enums with payloads, not optional fields that allow contradictions (`done: true` with no date). Parse external data into types at the boundary. Fix the model instead of casting. Derive types from an authoritative schema when one exists. Strengthen a type where a runtime assertion shows it is too weak, then stop. In dynamic languages, use schemas.
+Encode the rules in the types. Use sum types or enums with payloads, not optional fields that allow contradictions (`done: true` with no date). Parse external data into types at the boundary. Fix the model instead of casting. Derive types from an authoritative schema when one exists. Strengthen a type where a runtime assertion shows it is too weak, then stop. In dynamic languages, use schemas.
 
 Use when: designing types or signatures, or about to write a cast, `any`, or a "should never happen" check.
 

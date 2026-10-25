@@ -69,17 +69,17 @@ separated by semicolons, followed by its source links and any qualification:
 - Knowledge: `observed`, `reported`, `inferred`, `disputed`, or `unknown`.
 - Describes: `practice`, `policy`, `intent`, or `definition`.
 
-Observed means supported by something actually inspected, not independently
-verified universal behavior. Reported means attributed to a person or
+Observed means supported by something inspected, not independently verified
+universal behavior. Reported means attributed to a person or
 document. An inference states its basis. Disputed means accounts conflict.
 Unknown names what is missing. Do not add invented confidence percentages.
 
 Evidence defaults apply only to that record. If one field has a different
-basis, explicitly qualify it with its own status, claim type, and source.
+basis, qualify it with its own status, claim type, and source.
 Prefer separate records for conflicting claims so a consumer cannot collapse
 them. A policy claim and a practice claim may both be accurate accounts.
 In ENVISIONED mode, planned actions/rules are intent, not observed practice;
-any existing constraints or background observations must be labeled as such.
+label any existing constraints or background observations as such.
 
 Sources are records too:
 
@@ -134,8 +134,8 @@ not a business execution trace. Name this difference wherever it matters.
 
 A flow/state/relationship diagram is optional. Every meaningful node and edge
 must point back to a record or an explicit evidence-qualified field. Mark
-uncertainty visibly, and do not rely on position, animation, or an unlabeled
-arrow to imply extra semantics. An HTML viewer can generate its own JSON,
+uncertainty visibly, and do not use position, animation, or an unlabeled
+arrow to imply extra meaning. An HTML viewer can generate its own JSON,
 but that data must retain IDs, evidence, baseline revision, and unknowns.
 
 ## Partial captures, changes, and consumers

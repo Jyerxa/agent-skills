@@ -43,6 +43,7 @@ filter installs.
 | [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a cinematic, portable HTML journey with expressive 3D scenes, choreographed camera movement, progressive discovery, and evidence available on demand. |
 | [`improve-process`](skills/in-progress/improve-process) | **In progress.** Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
 | [`coding-principles`](skills/in-progress/coding-principles) | **In progress.** Curated coding principles for agents. A short always-on core plus topic files that load only when the work needs them (design, state, tests, debugging, verification). |
+| [`code-review`](skills/in-progress/code-review) | **In progress.** Review existing or changed code against coding principles, prioritizing simplicity and reader cognitive load with evidence-backed findings and concrete, minimal remedies. |
 | [`system-discovery`](skills/system-discovery) | Guide an interview from a rough software idea to a system brief covering purpose, users, workflows, responsibilities, rules, and scope - ready to inform codebase design. |
 | [`pattern-design`](skills/pattern-design) | Turn a system design spec or PRD into a disciplined pattern-based design — which patterns to apply, where, why — plus repo-ready agent instructions that enforce it. |
 | [`jy-codebase-analysis`](skills/jy-codebase-analysis) | Deep, evidence-backed analysis of an existing codebase: an orchestrator surveys the repo and fans out subagents to read every file, then synthesizes a business overview, a business-logic catalog (calculations captured as business rules), an architecture overview with Mermaid diagrams, and a layer-by-layer engineering-patterns report. Works in Claude Code, Cursor, Codex, and Copilot. |
@@ -98,6 +99,8 @@ Every skill is a folder under `skills/` containing a `SKILL.md` (name,
 description, and version/lifecycle metadata, then the instructions) and any
 supporting reference files. That layout is the whole distribution mechanism — `npx skills` reads it
 directly from this repo.
+Each skill installs on its own, so nothing in a skill may link outside its
+own folder. [`AGENTS.md`](AGENTS.md) has the full rule.
 
 ```
 skills/

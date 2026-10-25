@@ -6,7 +6,7 @@ A module's interface should be much simpler than what it does. Warning signs: a 
 Use when: creating or splitting a class, module, or function.
 
 ## Hide information
-Keep decisions that may change (format, storage, algorithm, vendor) private to one module. Callers use behavior, not representation. Do not re-export transport, storage, or framework types through the public surface.
+Keep decisions that may change (format, storage, algorithm, vendor) private to one module. Callers use behavior, not representation. Do not re-export transport, storage, or framework types through the public interface.
 
 Use when: choosing what a module exposes.
 

@@ -56,7 +56,7 @@ flowchart LR
 ## Runtime units (containers)
 
 <Deployable or runnable units: services, workers, scheduled jobs, UIs,
-databases, queues. Derived from build and deploy files and entry points.>
+databases, queues. Derive them from build and deploy files and entry points.>
 
 ```mermaid
 flowchart TB
@@ -116,8 +116,8 @@ each.>
 ## Data model
 
 <Core entities and relationships as persisted: tables, collections, or
-aggregates. Mark whether this comes from schema/migrations (stated) or from
-ORM models (stated), or was reconstructed from usage (inferred).>
+aggregates. Mark whether this comes from schema/migrations (stated), from
+ORM models (stated), or from reconstruction based on usage (inferred).>
 
 ```mermaid
 erDiagram
@@ -157,5 +157,5 @@ plus secrets handling. For secrets, give locations only and never values.>
 
 <Layer violations, dependency cycles, god modules, duplicated logic across
 components (link to the Business Logic Catalog conflicts), tight coupling to
-external SDKs, and missing boundaries. Each with evidence.>
+external SDKs, and missing boundaries. Give evidence for each.>
 ```
