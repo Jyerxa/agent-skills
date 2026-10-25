@@ -1,0 +1,6 @@
+interface:
+  display_name: "Technical revision"
+  short_description: "Revise technical prose and organization for clarity"
+  default_prompt: "Use $technical-revision to improve this technical document."
+policy:
+  allow_implicit_invocation: false
