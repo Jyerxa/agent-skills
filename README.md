@@ -30,10 +30,12 @@ globally with `-g`).
 
 ## Skills
 
-Skills and plugins marked **In progress** still live under an `in-progress/`
-folder. They work, but they are still taking shape, and their behaviour and
-outputs may change between updates. The installers show the label at the start
-of the description.
+Versioning starts from a conservative `0.0.1` / `in-progress` baseline, not a
+release or a new maturity claim. Read each skill's `SKILL.md` for its current
+version and lifecycle. Existing paths stay unchanged, including skills outside
+`in-progress/`. Behaviour and outputs may change during development. Existing
+description labels remain visible in installers; lifecycle metadata does not
+filter installs.
 
 | Skill | Description |
 | --- | --- |
@@ -80,11 +82,22 @@ also a plugin marketplace, so one line inside Claude Code installs any of them:
 
 To run one from a checkout without installing: `claude --plugin-dir claude/plugins/in-progress/tree`.
 
+## Versioning
+
+Each skill has its own numeric version and lifecycle label in `SKILL.md`.
+The available labels are `in-progress`, `alpha`, `beta`, and `release`; promotion
+is a deliberate review decision. Versions cover the whole skill folder, not the
+repository or its Claude Code plugins.
+
+See [Versioning and releases](VERSIONING.md) for the metadata, compatibility
+rules, release checklist, and how to install a future tagged snapshot. Normal
+installs above follow the default branch, including work in progress.
+
 ## Layout
 
-Every skill is a folder under `skills/` containing a `SKILL.md` (name +
-description frontmatter, then the instructions) and any supporting reference
-files. That layout is the whole distribution mechanism — `npx skills` reads it
+Every skill is a folder under `skills/` containing a `SKILL.md` (name,
+description, and version/lifecycle metadata, then the instructions) and any
+supporting reference files. That layout is the whole distribution mechanism — `npx skills` reads it
 directly from this repo.
 
 ```
@@ -92,6 +105,11 @@ skills/
   <skill-name>/
     SKILL.md
     references/   (optional supporting files)
+  in-progress/    (existing paths kept; metadata is the lifecycle authority)
+    <skill-name>/
+      SKILL.md
+      references/ (optional supporting files)
+VERSIONING.md     (skill versioning and release process)
 claude/
   plugins/
     in-progress/          (plugins still taking shape)

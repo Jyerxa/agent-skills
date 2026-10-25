@@ -1,6 +1,9 @@
 ---
 name: system-discovery
 description: 'Guide an interview from a rough software idea to a system brief: purpose, users, workflows, responsibilities, business rules, scope, and constraints. Use when the user wants to figure out what a system should do before designing its codebase, or needs an idea clarified for architecture work.'
+metadata:
+  version: "0.0.1"
+  lifecycle: "in-progress"
 ---
 
 # System Discovery

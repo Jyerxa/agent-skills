@@ -21,7 +21,11 @@ def tokens(text):
 def main():
     errors = []
     skill_md = (SKILL / "SKILL.md").read_text()
-    match = re.match(r"---\nname: (.+)\ndescription: '(.+)'\n---\n(.*)", skill_md, re.S)
+    # Optional release metadata is not part of the instruction budget.
+    match = re.match(
+        r"---\nname: ([^\n]+)\ndescription: '([^\n]+)'\n"
+        r"(?:metadata:\n(?:  [^\n]+\n)+)?---\n(.*)", skill_md, re.S
+    )
     if not match:
         sys.exit("SKILL.md needs name and description frontmatter")
     _, description, body = match.groups()
