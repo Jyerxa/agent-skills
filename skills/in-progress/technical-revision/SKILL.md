@@ -1,6 +1,7 @@
 ---
 name: technical-revision
-description: 'In progress: Revise technical writing when explicitly invoked, directly or through technical-writing. Review prose, composition, or both, with autonomous editing or approval before changes.'
+description: 'Revise technical prose, composition, or both, with autonomous editing or approval before changes.'
+disable-model-invocation: true
 metadata:
   version: "0.0.1"
   lifecycle: "in-progress"

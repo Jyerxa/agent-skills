@@ -1,6 +1,7 @@
 ---
 name: technical-writing
-description: 'In progress: Author technical documents when explicitly requested by name. Organize information for the reader, write clear prose, and revise the draft before delivery. Not an always-on style for chat replies.'
+description: 'Author technical documents: organize information for the reader, write clear prose, and revise the draft before delivery.'
+disable-model-invocation: true
 metadata:
   version: "0.0.1"
   lifecycle: "in-progress"
@@ -14,8 +15,8 @@ metadata:
 unnecessary words, sentences, and sections. Keep context, examples, and repetition
 when they reduce the reader's effort. Brevity must not remove facts or qualifications.
 
-Use only when the user invokes this skill. Honor the requested audience, format,
-scope, and source material. Complete both phases and deliver the draft by default.
+Honor the requested audience, format, scope, and source material. Complete both
+phases and deliver the draft by default.
 If the user requests an outline review or another checkpoint, pause there for
 feedback before continuing. Keep planning proportional to the document; a short
 answer does not need a separate planning artifact.
