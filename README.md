@@ -80,9 +80,7 @@ options mean `both` and `autonomous`. Recommendations include concrete changes;
 the draft is not edited until you approve them in that mode.
 
 Each skill installs independently. They bundle identical principles, revision
-instructions, and pattern guidance; package checks detect drift. The
-[evaluation notes](reviews/in-progress/technical-writing/report.md) record source
-choices, behavioral checks, and limitations.
+instructions, and pattern guidance.
 
 ## Plugins
 
