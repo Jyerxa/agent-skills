@@ -22,6 +22,10 @@ Defaults: **both prose and composition; autonomous revision**. Honor explicit
 user choices, including checkpoints. Apply this skill to the requested text,
 not to unrelated chat or files.
 
-The pattern catalog adapts Lauren Tan's Unslop, with a bundled
-[MIT notice](references/unslop-license.txt). Its patterns are review signals,
-not word bans or evidence that a human did not write the text.
+The patterns are review signals, not word bans or evidence that a human did not
+write the text.
+
+The pattern catalog includes material adapted from Lauren Tan's Unslop. The
+[third-party notice](references/third-party-notices.txt) preserves the source's
+copyright and license; it credits the original Unslop material, not authorship
+of this skill as a whole.

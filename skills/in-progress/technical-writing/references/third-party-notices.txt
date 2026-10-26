@@ -1,3 +1,9 @@
+Third-party material: Unslop
+
+The pattern catalog includes material adapted from Lauren Tan's Unslop.
+The following notice is retained for that source material. It does not attribute
+authorship of this skill as a whole to Lauren Tan.
+
 MIT License
 
 Copyright (c) 2026 Lauren Tan

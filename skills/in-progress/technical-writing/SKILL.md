@@ -70,5 +70,9 @@ already read. Default to both composition and prose, autonomously; honor request
 revision options and checkpoints. Revision never restarts the authoring workflow.
 
 Deliver the requested artifact without a process report unless requested. Mention
-only assumptions or unresolved gaps that affect its use. The pattern catalog adapts
-Lauren Tan's Unslop, with its [MIT notice](references/unslop-license.txt).
+only assumptions or unresolved gaps that affect its use.
+
+The pattern catalog includes material adapted from Lauren Tan's Unslop. The
+[third-party notice](references/third-party-notices.txt) preserves the source's
+copyright and license; it credits the original Unslop material, not authorship
+of this skill as a whole.
