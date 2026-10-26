@@ -1,5 +1,5 @@
 interface:
-  display_name: "Technical Writing"
+  display_name: "Technical writing"
   short_description: "Organize and write clear technical documents"
   default_prompt: "Use $technical-writing to author a technical document from my source material."
 policy:
