@@ -1,0 +1,42 @@
+name: Architecture storytelling package
+on:
+  pull_request:
+    paths:
+      - 'skills/in-progress/architecture-storytelling/**'
+      - 'reviews/in-progress/architecture-storytelling/**'
+      - '.github/workflows/architecture-storytelling.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install package-check dependency
+        run: python -m pip install PyYAML==6.0.3
+      - name: Check metadata and self-contained references
+        run: python reviews/in-progress/architecture-storytelling/check.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install development-only browser test dependency
+        run: |
+          npm install --prefix /tmp/architecture-test --no-audit --no-fund playwright-core@1.63.0
+          /tmp/architecture-test/node_modules/.bin/playwright-core install --with-deps chromium
+      - name: Exercise fictional HTML presentation offline
+        env:
+          NODE_PATH: /tmp/architecture-test/node_modules
+          SCREENSHOT_DIR: architecture-test-artifacts
+        run: node reviews/in-progress/architecture-storytelling/sample/browser-check.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: architecture-storytelling-browser-evidence
+          path: |
+            architecture-test-artifacts/
+            reviews/in-progress/architecture-storytelling/sample/browser-results.json
+          retention-days: 7

@@ -39,6 +39,7 @@ filter installs.
 
 | Skill | Description |
 | --- | --- |
+| [`architecture-storytelling`](skills/in-progress/architecture-storytelling) | **In progress.** Explain system architecture, business rationale, rules and data flows through a cinematic, presenter-led HTML journey. |
 | [`technical-writing`](skills/in-progress/technical-writing) | **In progress.** Explicitly invoked technical authoring: organize information for the reader, write clear prose, and revise before delivery. |
 | [`technical-revision`](skills/in-progress/technical-revision) | **In progress.** Revise technical prose, composition, or both, autonomously or through recommendations for approval. Works on existing drafts without the authoring skill. |
 | [`capture-process`](skills/in-progress/capture-process) | **In progress.** Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |

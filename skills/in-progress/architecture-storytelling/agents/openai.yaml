@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture storytelling"
+  short_description: "Explain system architecture through cinematic HTML"
+  default_prompt: "Use $architecture-storytelling to turn my system architecture into a visually engaging HTML presentation."
