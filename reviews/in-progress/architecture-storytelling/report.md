@@ -42,8 +42,16 @@ mandatory layout.
 
 Local Chromium could not launch because the sandbox rejects browser sockets.
 A supported escalation also failed before launch. No local browser pass is
-claimed. The PR workflow runs the sample offline in Chromium and uploads desktop
-and narrow screenshots; results are pending until that workflow completes.
+claimed. CI run 40783097854 passed the package checks and the offline Chromium 153
+browser suite on commit 105294b. All eight scenes and twelve interaction/check
+categories passed, with no browser errors or network requests. Desktop and
+390px screenshots were inspected. Main captions and controls are readable;
+small SVG labels in the narrow overview remain a sample limitation. This
+fixture is not approved as a full mobile or cinematic design benchmark.
+
+The initial CI attempt caught an SVG test harness issue (`innerText` is only for
+HTML elements); changing it to `textContent` resolved it. No presentation behavior
+was changed for that correction. Final formatting is rechecked by the PR workflow.
 
 The browser checker covers all scenes, navigation/reversal, pause/replay,
 keyboard controls, evidence focus restoration, reduced motion and overflow.
