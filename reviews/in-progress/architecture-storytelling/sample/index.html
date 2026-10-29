@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Expense / control in motion</title
+  ><style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, sans-serif;
+      background: #020812;
+      color: #e8faff;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100svh;
+      background: radial-gradient(ellipse at 65% 40%, #092734 0, #020812 65%);
+    }
+    header {
+      padding: 24px 5vw;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #164658;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+    }
+    button,
+    select {
+      background: #0c202e;
+      color: #e8faff;
+      border: 1px solid #286579;
+      border-radius: 5px;
+      padding: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button:hover {
+      border-color: #00f5d4;
+    }
+    button:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+      outline: 3px solid #ffcc33;
+      outline-offset: 4px;
+    }
+    button:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    main {
+      padding: 26px 5vw 0;
+    }
+    #eyebrow {
+      color: #00f5d4;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 58px);
+      max-width: 1000px;
+      line-height: 1.04;
+      margin: 12px 0;
+    }
+    #why {
+      color: #a9c1ce;
+      max-width: 920px;
+      font-size: 16px;
+      line-height: 1.45;
+      min-height: 46px;
+    }
+    #stage {
+      height: 48vh;
+      min-height: 300px;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid #164658;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    svg .led {
+      stroke: #00f5d4;
+      fill: none;
+      stroke-width: 2;
+      filter: drop-shadow(0 0 5px #00c4c4);
+    }
+    svg text {
+      fill: #dffaff;
+      font-family: Arial;
+      font-size: 18px;
+    }
+    svg .muted {
+      fill: #8ba8ba;
+      font-size: 14px;
+    }
+    svg .hot {
+      stroke: #ffba38;
+    }
+    svg .bad {
+      stroke: #ff466d;
+    }
+    svg .panel {
+      fill: #08202d;
+      stroke: #2da8bc;
+      stroke-width: 2;
+    }
+    svg .tag {
+      fill: #00f5d4;
+      font-size: 14px;
+      letter-spacing: 2px;
+    }
+    #note {
+      min-height: 38px;
+      padding: 12px 0;
+      color: #ffce76;
+      font-size: 14px;
+    }
+    footer {
+      padding: 14px 5vw 24px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+    #position {
+      margin-right: auto;
+      font-size: 13px;
+      color: #a9c1ce;
+    }
+    .sub {
+      font-size: 11px;
+      color: #7194aa;
+      padding: 0 5vw 14px;
+    }
+    dialog {
+      background: #071722;
+      color: #ddf7ff;
+      border: 1px solid #20afc4;
+      border-radius: 8px;
+      max-width: 620px;
+      width: 90vw;
+      max-height: 85vh;
+      padding: 25px;
+    }
+    dialog::backdrop {
+      background: #000a;
+    }
+    dialog p {
+      line-height: 1.6;
+    }
+    a {
+      color: #59ffe5;
+    }
+    #detail {
+      display: none;
+      color: #8cb3ca;
+      font: 13px monospace;
+      margin: 0 0 8px;
+    }
+    body.technical #detail {
+      display: block;
+    }
+    @media (max-width: 600px) {
+      header {
+        padding: 16px 5vw;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+      }
+      main {
+        padding-top: 18px;
+      }
+      #stage {
+        height: 39vh;
+        min-height: 270px;
+      }
+      #why {
+        font-size: 14px;
+        min-height: 62px;
+      }
+      h1 {
+        font-size: 32px;
+      }
+      footer {
+        gap: 6px;
+      }
+      button,
+      select {
+        padding: 10px;
+        font-size: 12px;
+      }
+      #position {
+        width: 100%;
+      }
+      .sub {
+        font-size: 10px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        scroll-behavior: auto;
+      }
+    }
+  </style>
+  <header>
+    <span>FIELD NOTES / EXPENSE SYSTEM</span><span>FICTIONAL · v1</span>
+  </header>
+  <main>
+    <div id="eyebrow"></div>
+    <h1 id="caption"></h1>
+    <p id="why"></p>
+    <p id="detail"></p>
+    <div id="stage">
+      <svg
+        id="visual"
+        role="img"
+        aria-labelledby="svgtitle"
+        viewBox="0 0 1000 350"
+      >
+        <title id="svgtitle"></title>
+        <g id="art"></g>
+      </svg>
+    </div>
+    <div id="note"></div>
+  </main>
+  <footer>
+    <span id="position"></span><button id="begin">Begin</button
+    ><button id="back">← Back</button><button id="next">Next →</button
+    ><button id="pause">Pause</button><button id="replay">Replay</button
+    ><select id="index" aria-label="Scene index"></select
+    ><button id="tech" aria-pressed="false">Technical</button
+    ><button id="evidence">Evidence</button>
+  </footer>
+  <div class="sub">
+    Narrative staging, not physical topology or system timing. Manual pacing · ←
+    → navigate · Space pause · Home / End · SVG: no WebGL required.
+  </div>
+  <dialog id="drawer" aria-labelledby="drawerTitle">
+    <h2 id="drawerTitle">Source & rationale</h2>
+    <p id="proof"></p>
+    <p>
+      <a href="source.md">Fictional source / fictional-v1</a> ·
+      <a href="model.md">Working model</a> ·
+      <a href="storyboard.md">Storyboard</a>
+    </p>
+    <button id="close">Close</button>
+  </dialog>
+  <script>
+    "use strict";
+    const scenes = [
+      {
+        label: "01 / THE OUTCOME",
+        caption: "Less handling. Approval stays.",
+        why: "The objective is simpler reimbursement handling without giving up approval control.",
+        note: "A fictional architecture, not a claim of measured savings.",
+        detail:
+          "Objective → source S1. Component responsibilities appear only when supported.",
+        proof:
+          "S1 documents both objectives. The receipt and light rails are presentation metaphors, not architecture elements.",
+      },
+      {
+        label: "02 / SUBMIT",
+        caption: "Send the amount and receipt.",
+        why: "The employee supplies the two inputs the Expense API will check.",
+        note: "Transport and authentication are not specified.",
+        detail:
+          "Employee → Web UI → Expense API; payload: amount, receipt. S2.",
+        proof:
+          "S2 explicitly describes submission through the Web UI to Expense API. No protocol, acknowledgement timing or security guarantees are supplied.",
+      },
+      {
+        label: "03 / INVALID BRANCH",
+        caption: "Missing receipt? Stop before saving.",
+        why: "The API rejects invalid requests. Keeping invalid submissions out is a plausible reason for checking early—not a documented rationale.",
+        note: "This is a rejected example. Next shows a separate valid request.",
+        detail:
+          "Expense API: amount > 0 AND receipt present. Failure → reject; no Expense Store write. S3.",
+        proof:
+          "S3 supports both checks, rejection and no saving. The missing-receipt example illustrates one failure, not a new business rule. Early-validation rationale is inferred; confirm with the design owner.",
+      },
+      {
+        label: "04 / VALID BRANCH",
+        caption: "Valid requests enter Pending.",
+        why: "A valid request is saved. Pending distinguishes the stored request from a completed payment; that interpretation is not an approval guarantee.",
+        note: "Illustrative valid request: $12,400 with a receipt. No payment outcome is implied.",
+        detail:
+          "Expense API → Expense Store; valid request, status Pending. S3–S4.",
+        proof:
+          "S3–S4 establish validation before saving and Pending status. $12,400 is a fictional representative input, not a source fact. The meaning beyond the status name is interpretive.",
+      },
+      {
+        label: "05 / BUSINESS RULE",
+        caption: "Above $10,000: manager approval first.",
+        why: "The high-value rule retains approval control before payment.",
+        note: "ENFORCEMENT LOCATION UNSPECIFIED · This gate is a rule, not a component.",
+        detail:
+          "If amount > $10,000, manager approval required before payment. S5. No enforcement component assigned.",
+        proof:
+          "S5 requires manager approval above $10,000 before payment. This abstract gate is deliberately unassigned. Approval workflow, trigger and state transitions are absent from the source; other approval requirements are unknown.",
+      },
+      {
+        label: "06 / EXTERNAL CALL",
+        caption: "After approval, call the provider.",
+        why: "The payment adapter calls an external provider. The source does not explain why this responsibility is separated.",
+        note: "How work reaches the adapter is unspecified. A call is not proof of payment.",
+        detail:
+          "Payment adapter → external provider, after approval. S6. No Expense Store → adapter edge asserted.",
+        proof:
+          "S6 supports the adapter call after approval. The provider is external. No encryption, delivery guarantee, success response, store-to-adapter transfer or payment-status update is documented.",
+      },
+      {
+        label: "07 / UNRESOLVED EXCEPTION",
+        caption: "A timeout leaves a design question.",
+        why: "Provider timeout recovery is unspecified. The presentation cannot promise retries or successful reimbursement.",
+        note: "RECOVERY UNSPECIFIED · What happens after a provider timeout?",
+        detail:
+          "Payment adapter / external provider timeout boundary. No retry, idempotency or reconciliation mechanism claimed. S6.",
+        proof:
+          "S6 identifies timeout recovery as unspecified. The broken circuit illustrates uncertainty, not an actual implemented failure-handling path.",
+      },
+      {
+        label: "08 / RECONNECT",
+        caption: "One journey. Two important gaps.",
+        why: "Submission, validation and Pending storage are defined. Approval is required for high-value requests; the later provider call is defined after approval.",
+        note: "Open questions: where is approval enforced, and how are provider timeouts recovered?",
+        detail:
+          "S1–S6. Store-to-payment trigger and workflow remain unknown; overview preserves separate islands.",
+        proof:
+          "Overview is limited to S1–S6. Approval enforcement and timeout recovery remain on stage. Separate workflow islands deliberately avoid inventing a connection. This source supports intended handling reduction, not measured business results.",
+      },
+    ];
+    const $ = (id) => document.getElementById(id),
+      ns = "http://www.w3.org/2000/svg";
+    let scene = 0,
+      paused = false,
+      progress = 0,
+      last = 0,
+      raf = 0;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+    function el(tag, attrs = {}, text) {
+      const n = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      if (text !== undefined) n.textContent = text;
+      return n;
+    }
+    function add(tag, a, t) {
+      const n = el(tag, a, t);
+      $("art").append(n);
+      return n;
+    }
+    function line(x1, y1, x2, y2, cls = "led") {
+      add("line", { x1, y1, x2, y2, class: cls });
+    }
+    function text(x, y, t, cls = "") {
+      add("text", { x, y, class: cls, "text-anchor": "middle" }, t);
+    }
+    function box(x, y, w, h, title, sub) {
+      add("rect", { x, y, width: w, height: h, rx: 12, class: "panel" });
+      text(x + w / 2, y + h / 2, title);
+      if (sub) text(x + w / 2, y + h / 2 + 28, sub, "muted");
+    }
+    function receipt(x, y, s = 1) {
+      const g = el("g", { transform: `translate(${x} ${y}) scale(${s})` });
+      g.append(
+        el("path", {
+          d: "M0 0H100V140L85 130 70 140 55 130 40 140 25 130 0 140Z",
+          class: "panel",
+        }),
+      );
+      for (let y = 30; y < 110; y += 22)
+        g.append(el("line", { x1: 18, y1: y, x2: 82, y2: y, class: "led" }));
+      $("art").append(g);
+    }
+    function pulse(x1, y1, x2, y2) {
+      add("circle", {
+        id: "pulse",
+        cx: x1 + (x2 - x1) * progress,
+        cy: y1 + (y2 - y1) * progress,
+        r: 8,
+        fill: "#fff",
+        stroke: "#00f5d4",
+        "stroke-width": 5,
+      });
+    }
+    function render() {
+      const a = $("art");
+      a.replaceChildren();
+      const mobile = innerWidth < 600;
+      $("visual").setAttribute(
+        "viewBox",
+        mobile ? "160 0 680 350" : "0 0 1000 350",
+      );
+      for (let i = -4; i <= 4; i++)
+        line(500 + i * 35, 155, 500 + i * 190, 350, "grid");
+      a.querySelectorAll(".grid").forEach((n) => {
+        n.setAttribute("stroke", "#123544");
+        n.setAttribute("stroke-width", "1");
+      });
+      if (scene === 0) {
+        add("ellipse", { cx: 500, cy: 250, rx: 260, ry: 65, class: "led" });
+        add("ellipse", {
+          cx: 500,
+          cy: 250,
+          rx: 195,
+          ry: 40,
+          class: "led",
+          opacity: 0.3,
+        });
+        receipt(445, 45, 1.1);
+        text(500, 320, "HUMAN OUTCOME / CONTROLLED REIMBURSEMENT", "tag");
+      }
+      if (scene === 1) {
+        box(180, 100, 210, 145, "Web UI", "Employee submission");
+        box(615, 100, 210, 145, "Expense API", "Amount + receipt");
+        line(390, 170, 610, 170);
+        receipt(425 + progress * 100, 120, 0.45);
+        text(500, 285, "Submit →", "tag");
+      }
+      if (scene === 2) {
+        box(270, 25, 460, 245, "Expense API", "");
+        box(310, 65, 380, 65, "Amount > 0", "");
+        box(310, 145, 380, 65, "Receipt present?", "");
+        line(500, 210, 500, 285, "led bad");
+        text(500, 316, "REJECT / NO SAVE", "tag");
+        add("path", { d: "M760 90L800 130M800 90L760 130", class: "led bad" });
+      }
+      if (scene === 3) {
+        box(180, 100, 210, 140, "Expense API", "Valid");
+        line(390, 170, 610, 170);
+        add("path", {
+          d: "M615 85Q725 30 835 85V245Q725 300 615 245Z",
+          class: "panel",
+        });
+        add("ellipse", { cx: 725, cy: 85, rx: 110, ry: 28, class: "led" });
+        text(725, 150, "Expense Store");
+        text(725, 195, "PENDING", "tag");
+        text(725, 228, "$12,400 + receipt", "muted");
+        pulse(395, 170, 600, 170);
+      }
+      if (scene === 4) {
+        add("path", {
+          d: "M310 285V50L690 20V285M330 285V70L670 40V285",
+          class: "led hot",
+          "stroke-width": 5,
+        });
+        for (let x = 370; x < 650; x += 45) line(x, 80, x, 265, "led hot");
+        receipt(220, 140, 0.65);
+        text(500, 125, "MANAGER APPROVAL");
+        text(500, 165, "required before payment", "muted");
+        text(500, 320, "RULE OVERLAY / NOT A DEPLOYED COMPONENT", "tag");
+      }
+      if (scene === 5 || scene === 6) {
+        box(170, 100, 230, 145, "Payment adapter", "After approval");
+        box(640, 100, 200, 145, "Provider", "External");
+        line(550, 20, 490, 320);
+        text(530, 340, "EXTERNAL BOUNDARY", "muted");
+        if (scene === 5) {
+          line(400, 170, 635, 170);
+          pulse(405, 170, 630, 170);
+        } else {
+          line(400, 170, 465, 170, "led hot");
+          line(570, 170, 635, 170, "led hot");
+          text(520, 190, "?");
+          text(520, 65, "TIMEOUT / RECOVERY UNKNOWN", "tag");
+        }
+      }
+      if (scene === 7) {
+        box(170, 40, 180, 90, "Web UI");
+        line(350, 85, 420, 85);
+        box(420, 40, 180, 90, "Expense API");
+        line(600, 85, 670, 85);
+        box(670, 40, 165, 90, "Store", "Pending");
+        text(500, 177, "> $10,000 → MANAGER APPROVAL", "tag");
+        text(500, 203, "Enforcement location unspecified", "muted");
+        box(245, 245, 220, 80, "Payment adapter");
+        line(465, 285, 600, 285);
+        box(600, 245, 200, 80, "Provider");
+        text(500, 235, "After approval · trigger unspecified", "muted");
+      }
+    }
+    function frame(t) {
+      if (!last) last = t;
+      progress = Math.min(1, progress + (t - last) / 1300);
+      last = t;
+      render();
+      if (progress < 1 && !paused && !document.hidden)
+        raf = requestAnimationFrame(frame);
+    }
+    function run() {
+      cancelAnimationFrame(raf);
+      last = 0;
+      if (reduced.matches) {
+        progress = 1;
+        render();
+      } else if (!paused && !document.hidden && progress < 1)
+        raf = requestAnimationFrame(frame);
+    }
+    function go(n) {
+      cancelAnimationFrame(raf);
+      scene = Math.max(0, Math.min(scenes.length - 1, n));
+      progress = 0;
+      const s = scenes[scene];
+      $("eyebrow").textContent = s.label;
+      $("caption").textContent = s.caption;
+      $("why").textContent = s.why;
+      $("note").textContent = s.note;
+      $("detail").textContent = s.detail;
+      $("proof").textContent = s.proof;
+      $("svgtitle").textContent = s.caption + " " + s.detail;
+      $("position").textContent = `${scene + 1} / ${scenes.length}`;
+      $("index").value = scene;
+      $("back").disabled = scene === 0;
+      $("next").disabled = scene === scenes.length - 1;
+      render();
+      run();
+    }
+    scenes.forEach((s, i) => {
+      const o = document.createElement("option");
+      o.value = i;
+      o.textContent = s.label;
+      $("index").append(o);
+    });
+    $("begin").onclick = () => go(1);
+    $("next").onclick = () => go(scene + 1);
+    $("back").onclick = () => go(scene - 1);
+    $("replay").onclick = () => go(scene);
+    $("index").onchange = (e) => go(+e.target.value);
+    $("pause").onclick = () => {
+      paused = !paused;
+      $("pause").textContent = paused ? "Resume" : "Pause";
+      if (paused) cancelAnimationFrame(raf);
+      else run();
+    };
+    $("tech").onclick = () => {
+      document.body.classList.toggle("technical");
+      $("tech").setAttribute(
+        "aria-pressed",
+        document.body.classList.contains("technical"),
+      );
+    };
+    $("evidence").onclick = () => $("drawer").showModal();
+    $("close").onclick = () => $("drawer").close();
+    $("drawer").onclose = () => $("evidence").focus();
+    document.addEventListener("visibilitychange", () => {
+      cancelAnimationFrame(raf);
+      last = 0;
+      if (!document.hidden) run();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(e.target.tagName) ||
+        $("drawer").open
+      )
+        return;
+      if (e.key === "ArrowRight") go(scene + 1);
+      else if (e.key === "ArrowLeft") go(scene - 1);
+      else if (e.key === "Home") go(0);
+      else if (e.key === "End") go(7);
+      else if (e.code === "Space") {
+        $("pause").click();
+        e.preventDefault();
+      }
+    });
+    addEventListener("resize", render);
+    reduced.addEventListener("change", () => {
+      if (reduced.matches) {
+        cancelAnimationFrame(raf);
+        progress = 1;
+        render();
+      }
+    });
+    go(0);
+  </script>
+</html>
