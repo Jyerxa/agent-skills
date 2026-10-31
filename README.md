@@ -42,6 +42,7 @@ filter installs.
 | [`architecture-storytelling`](skills/in-progress/architecture-storytelling) | **In progress.** Explain system architecture, business rationale, rules and data flows through a cinematic, presenter-led HTML journey. |
 | [`technical-writing`](skills/in-progress/technical-writing) | **In progress.** Explicitly invoked technical authoring: organize information for the reader, write clear prose, and revise before delivery. |
 | [`technical-revision`](skills/in-progress/technical-revision) | **In progress.** Revise technical prose, composition, or both, autonomously or through recommendations for approval. Works on existing drafts without the authoring skill. |
+| [`article-editing`](skills/in-progress/article-editing) | **In progress.** Edit technical articles so readers stay engaged and reach a complete, accurate understanding with the least effort. Restructures, cuts, and rewrites without changing facts or code; built for an editor agent working through a series. |
 | [`capture-process`](skills/in-progress/capture-process) | **In progress.** Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
 | [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a cinematic, portable HTML journey with expressive 3D scenes, choreographed camera movement, progressive discovery, and evidence available on demand. |
 | [`improve-process`](skills/in-progress/improve-process) | **In progress.** Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
@@ -82,6 +83,27 @@ the draft is not edited until you approve them in that mode.
 
 Each skill installs independently. They bundle identical principles, revision
 instructions, and pattern guidance.
+
+### Article editing workflow
+
+Invoke `article-editing` by name on an existing article, typically from an
+editor agent working through a series. It reads the draft as the intended
+reader, maps every point where the reader has to stop, lists every claim the
+draft makes, then restructures and rewrites so that terms are defined before
+use, one idea arrives at a time, and code is narrated in segments. Facts,
+qualifications, and code are preserved; the bundled `check_fidelity.py`
+confirms the code survived and lists identifiers, numbers, and links that
+disappeared. The edit ships with a short editor's note: structure changes,
+cuts with reasons, and questions for the author.
+
+Options match `technical-revision`: `prose`, `structure`, or `both` (default),
+and `autonomous` (default) or `recommend-and-approve`. A series template's
+headings are kept by default; the note proposes changes to the template.
+The skill bundles the same writing principles and pattern catalog as the
+technical writing skills, plus article-specific references on reader load,
+article shape, and article patterns. A [sample article](skills/in-progress/article-editing/fixtures/cqrs-article.md)
+with a [reference edit](skills/in-progress/article-editing/fixtures/cqrs-article.EDITED.md)
+shows the target.
 
 ## Plugins
 

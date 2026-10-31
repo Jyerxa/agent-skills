@@ -1,0 +1,6 @@
+interface:
+  display_name: "Article editing"
+  short_description: "Edit technical articles for engagement and low reader load"
+  default_prompt: "Use $article-editing to restructure and rewrite this article for readability without changing its facts or code."
+policy:
+  allow_implicit_invocation: false

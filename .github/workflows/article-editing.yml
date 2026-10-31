@@ -1,0 +1,22 @@
+name: Article editing skill checks
+on:
+  pull_request:
+    paths:
+      - 'skills/in-progress/article-editing/**'
+      - 'skills/in-progress/technical-writing/references/**'
+      - 'skills/in-progress/technical-revision/references/**'
+      - 'reviews/in-progress/article-editing/**'
+      - '.github/workflows/article-editing.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate links, bundled copies, fixture fidelity, and the fidelity script
+        run: python3 reviews/in-progress/article-editing/check.py
