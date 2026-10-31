@@ -24,8 +24,11 @@ it into an abstract.
 **A03: Preview overload.** A paragraph summarizes every part of the mechanism
 before any part has been explained ("places, marks paid, ships, and cancels
 under invariants, emits facts through an outbox-shaped hook, and a projector
-that maintains..."). Replace with the one idea and the names of the parts, and
-let each part be explained where it appears.
+that maintains..."), or a sentence lists all the parts by their unexplained
+names right before the paragraphs that define them. Replace with the one idea
+and the names of the parts, and let each part be explained where it appears.
+When a table already summarizes the parts, the sentence is a third summary;
+cut it.
 
 ## Sequence
 
@@ -95,3 +98,14 @@ mechanism in about three lines.
 **A18: Further reading without a reason.** Links with a title but no sentence
 on what each adds. Add the sentence. Drop a link only when the request allows
 and the article never relied on it.
+
+## Signposting
+
+**A19: Announced section.** A sentence about the article instead of the
+subject: "This section says what...", "The next section shows...", "This is
+the rule to keep." The reader is told what they are about to read instead of
+reading it, and an edit that adds these to every section has added a stop to
+every section. Open with the section's first claim; hand off with the content
+that creates the need for the next section. Keep a pointer only when the
+reader must skip ahead or back to use the page ("the complete listing is at
+the end").

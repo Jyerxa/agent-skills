@@ -24,7 +24,7 @@ If none of the three applies, one model will do, and the trade-offs below say wh
 
 ## Structure
 
-The split has five parts. Each has one job, and the pattern holds only while each part stays inside its job. The table names them in the order a change flows through them; the paragraphs that follow explain each one.
+The split has five parts. Each has one job, and the pattern holds only while each part stays inside its job. The table names them in the order a change flows through them.
 
 | Part | Job |
 | --- | --- |
@@ -418,6 +418,7 @@ The mechanism, in three lines: commands change the write model, which enforces t
 - The supplied article has no TypeScript tab. If the site's tab component needs one block per tab, either apply the same six splits to the TypeScript listing or place the full TypeScript listing after the narrated C#.
 - The concurrency walk-through under the command handlers (both writers read version 2, the loser's own rule rejects it on reload) is derived from the code, not stated in the source prose. Confirm it matches the intended reading.
 - "Catalog signal" and "the brief" assume readers know the series' catalog. The heading is kept because the template requires it; the body no longer refers to the catalog as something the reader has open.
+- The read time is still "8 min". The prose grew with definitions and code narration, so recompute it with the site's formula.
 
 **Assumptions**
 

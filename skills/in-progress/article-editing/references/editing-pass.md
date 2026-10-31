@@ -107,6 +107,11 @@ that leaves no stop on the map and no claim off the list.
   files are available; it also lists identifiers, numbers, and links that
   disappeared, which usually means a claim went with them.
 - **Flow:** read the edit once at speed. Any new stop goes back to step 6.
+- **Length:** compare with the source. Growth from definitions, a promise,
+  and code narration is expected. Growth from announcements, a point made at
+  three levels of detail, or a definition repeated at each use is not; find
+  which kind you added. A read-time estimate in the metadata is derived from
+  the text: update it when the site's formula is known, otherwise flag it.
 - **Template, constraints, title, metadata, and further reading** honored.
 - In approval mode: the proposal covers every intended change with locations
   and exact replacements, and nothing has been applied.

@@ -113,7 +113,13 @@ a failure:
 - Title, read time, and updated date stay.
 - The intent line may stay verbatim; it is the series' canonical statement.
 - Length is not a criterion. A good edit often lands near the original
-  length: shorter prose, longer code narration.
+  length: shorter prose, longer code narration. Growth that comes from
+  announcement sentences ("This section explains...", "The next section
+  shows...") or from summarizing the five parts three times (an overview
+  sentence, the table, and the paragraphs) is a failure of the edit, not a
+  cost of clarity.
+- The one-line Intent slot stays one line. Its terms are defined in the
+  opening or the first body section, not by growing the slot.
 - No chatty framing, no description of the editing process in the note.
 
 ## The editor's note

@@ -142,8 +142,11 @@ Headings and opening sentences let the reader predict what comes next, and
 prediction is what makes new material easy to absorb. A heading should say
 what the section gives ("Why one table cannot serve both" rather than "The
 problem"; "Where the split costs you" rather than "Where it bites"). A
-section's first sentence should say what the section does for the reader.
-When a template fixes the heading text, the first sentence does the job alone.
+section's first sentence should make the section's first claim, so the reader
+learns what the section is about by reading it. "This section explains why
+one store fails" is an announcement, and an announcement before every section
+is a stop before every section. When a template fixes the heading text, the
+first sentence does the job alone.
 
 ### Carry no external context
 

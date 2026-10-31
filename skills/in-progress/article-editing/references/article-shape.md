@@ -24,6 +24,8 @@ cleverness.
 - Use only words the reader already has. No term the article will define later.
 - Show the situation concretely, with the two things in tension visible.
 - Do not explain the solution. Name it, at most, in the sentence that follows.
+- Do not explain why the obvious approach fails. That is the body's first
+  job; a lede that argues it has become the first section.
 
 Before:
 
@@ -64,11 +66,24 @@ called:
    about each cost.
 6. The decision rule and the takeaway.
 
-Each section opens with a sentence that says what it gives the reader and
-closes on the thing that makes the next section necessary: "The board is now
-a copy. Copies can be stale, which the next section is about." That hand-off
-is what engagement feels like from inside. The reader is never asked to
-decide whether to continue.
+Each section opens with its first claim and closes on the thing that makes
+the next section necessary. The opener orients by saying something, not by
+announcing that the section will say something:
+
+> Before: This section says what makes a single store stop being enough.
+>
+> After: A single normalized store is the right default for most domains. It
+> stops being right when reads and writes need different shapes.
+
+The hand-off is content that creates the need, not a pointer:
+
+> Before: The next section names the parts of the split.
+>
+> After: The board is now a copy, and copies can be stale.
+
+That hand-off is what engagement feels like from inside. The reader is never
+asked to decide whether to continue, and never told what they are about to
+read instead of reading it.
 
 ### The running example
 
@@ -103,7 +118,9 @@ A table is for facts the reader will look up or compare: short cells,
 consistent columns. A list is for parallel items the reader will scan.
 Reasoning, causation, and trade-offs are prose. When a source table holds
 paragraphs, keep the table for the names and one-line roles, and move the
-reasoning into the paragraphs that introduce each part.
+reasoning into the paragraphs that introduce each part. The table is then the
+summary; do not add a sentence that lists the same parts again before the
+paragraphs. Two levels, overview and detail, are enough.
 
 ### Trade-offs and limits
 
@@ -131,8 +148,10 @@ heading or inside the first section, the running example inside each section,
 code narrated inside the implementation section, the takeaway inside the last
 prose section. When a template heading hides what the section gives (a
 "Structure" section that is really "the parts and what each is for"), let the
-section's first sentence say it. Recommend template changes in the editor's
-note; do not make them unasked.
+section's first sentence say it. A one-line slot such as "Intent" stays one
+line: define its terms in the opening that precedes it, or in the first body
+section, rather than growing the slot into a paragraph. Recommend template
+changes in the editor's note; do not make them unasked.
 
 ## Voice
 

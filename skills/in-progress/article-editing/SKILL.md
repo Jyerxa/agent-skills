@@ -94,7 +94,9 @@ the source:
   `python3 scripts/check_fidelity.py source.md edited.md` before delivery. It
   confirms the code survived and lists identifiers, numbers, and links that
   disappeared.
-- Keep the title, metadata, and further reading unless asked otherwise.
+- Keep the title, metadata, and further reading unless asked otherwise. A
+  read-time estimate is derived from the text; update it when the site's
+  formula is known, otherwise flag it in the note.
 
 ## Deliver
 
