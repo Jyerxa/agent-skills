@@ -104,8 +104,10 @@ To run one from a checkout without installing: `claude --plugin-dir claude/plugi
 
 Each skill has its own numeric version and lifecycle label in `SKILL.md`.
 The available labels are `in-progress`, `alpha`, `beta`, and `release`; promotion
-is a deliberate review decision. Versions cover the whole skill folder, not the
-repository or its Claude Code plugins.
+is a deliberate review decision. Every ready (`release`) skill must use
+`jy-<skill-name>` for both its folder and frontmatter name. The prefix is optional
+before release and does not indicate readiness by itself. Versions cover the
+whole skill folder, not the repository or its Claude Code plugins.
 
 See [Versioning and releases](VERSIONING.md) for the metadata, compatibility
 rules, release checklist, and how to install a future tagged snapshot. Normal
