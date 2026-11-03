@@ -37,9 +37,29 @@ All existing skills start at `0.0.1` / `in-progress`, including `pattern-design`
 `system-discovery`, and `jy-codebase-analysis` outside the `in-progress/` folder.
 This conservative initialization does not assess their quality or claim a prior
 stable release. No Git tags or GitHub Releases are created by adding metadata.
-Keep existing paths on promotion to preserve links and direct-path installs;
-read the metadata rather than inferring lifecycle from a path. Do not duplicate
-a skill into alpha, beta, release, or numbered directories.
+Keep existing paths on promotion except for the required ready-skill naming
+change below. Read the metadata rather than inferring lifecycle from a path.
+Do not duplicate a skill into alpha, beta, release, or numbered directories.
+
+### Ready-skill naming
+
+A ready skill (`metadata.lifecycle: "release"`) must have a frontmatter
+`name` and containing folder name of `jy-<skill-name>`, for example
+`name: jy-pattern-design` in `skills/jy-pattern-design/SKILL.md`.
+The suffix is a lowercase, hyphen-separated name. Keep an existing `jy-`
+prefix rather than doubling it.
+
+Before the first promotion to `release`, rename an unprefixed folder and
+frontmatter name together. Preserve the parent directory: this rule does not
+require moving skills out of `in-progress/`. Update install commands,
+catalog entries, references to the skill by name, and repository links or
+checks that use its old path in the same PR. Document how users migrate from
+the old installed name and direct path, and apply the version policy below.
+Do not rewrite historical tags or duplicate the skill under its old name.
+
+The prefix is optional for `in-progress`, `alpha`, and `beta` skills.
+It is not a maturity signal by itself and does not promote a skill. This rule
+does not rename the current in-progress skills or Claude Code plugins.
 
 ### Why separate labels instead of SemVer prerelease suffixes?
 
@@ -85,7 +105,9 @@ snapshot. When a maintainer decides to publish a particular skill:
 1. Review its whole bundle, contract, lifecycle, and next version in a PR.
    Record changes, breaking changes/migration steps, and known limitations in
    the PR. Keep unrelated skills and plugin versions unchanged.
-2. Parse the YAML and check that version/lifecycle follow the rules above. Run
+2. Parse the YAML and check that version/lifecycle follow the rules above. For
+   a `release` skill, also verify that its folder and frontmatter name match
+   and use `jy-<skill-name>`, with rename/migration updates complete. Run
    the skill's checks and `npx skills add . --list` from the repository root;
    verify its name is discovered once. Test installation into a scratch project
    and any bundled scripts. For coding-principles, also run
