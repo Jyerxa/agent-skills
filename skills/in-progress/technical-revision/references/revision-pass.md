@@ -7,7 +7,9 @@ or a newly authored draft.
 
 Infer the reader and purpose from the request and source. Preserve required format,
 voice, facts, uncertainty, requirement strength, identifiers, commands, code,
-quotations, and citations. Never invent evidence for a rewrite.
+quotations, and citations. Preserving a fact means not changing its meaning; it
+does not mean keeping every fact. Cut background the reader does not need. Never
+invent evidence for a rewrite.
 
 | Scope | Allowed changes |
 | --- | --- |
@@ -54,8 +56,10 @@ direct, supported statement; keep the original when no clearer equivalent exists
 For steps, commands, code, and output, apply [examples and procedures](examples-and-procedures.md):
 put warnings before the step they affect, keep prompt symbols and output out of
 command blocks, tag code blocks, and say where each placeholder's value comes from.
-Never change the text of a command, flag, identifier, or code sample; report a
-suspected error in one instead.
+Keep the text of commands, flags, identifiers, and code unless the source that
+defines them confirms the correct form, for example the tool's code or help output.
+Then correct it, because a reader will copy it, and report the correction. Flag a
+suspected error you cannot confirm instead of guessing.
 
 ## Verify and stop
 

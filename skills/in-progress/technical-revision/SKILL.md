@@ -12,12 +12,14 @@ metadata:
 **Minimize the effort required for the reader to develop an accurate understanding.**
 
 **Remove anything that adds reading effort without helping understanding.** Keep
-facts, qualifications, useful examples, and connections between ideas.
+needed facts, qualifications, useful examples, and connections between ideas.
 
 **Accuracy comes before polish.** A shorter sentence that changes a requirement,
-a flag, or a number is worse than the original. Revision preserves facts; it does
-not certify them. When a fact conflicts with the source or with another part of
-the document, flag it instead of choosing a version.
+a flag, or a number is worse than the original. Preserve what the facts mean, not
+every fact: cut background the reader does not need. When a command or value
+conflicts with the source that defines it, such as the tool's code, follow that
+source and report the correction. When you cannot tell which version is right,
+flag the conflict instead of choosing.
 
 Follow the [revision pass](references/revision-pass.md). It defines scope, approval,
 review order, and completion. Read the [writing principles](references/writing-principles.md)
