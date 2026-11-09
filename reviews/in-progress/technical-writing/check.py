@@ -1,5 +1,7 @@
 """Check the technical-writing and technical-revision packages and their evals.
 
+Revision eval cases live in reviews/in-progress/technical-revision/evals.
+
 Run from any directory: python3 reviews/in-progress/technical-writing/check.py
 Each skill installs on its own, so links must stay inside its folder, and the
 references both skills bundle must stay identical. The fixture checks confirm
@@ -19,8 +21,10 @@ ROOT = Path(__file__).resolve().parents[3]
 WRITING = ROOT / "skills/in-progress/technical-writing"
 REVISION = ROOT / "skills/in-progress/technical-revision"
 SKILLS = (WRITING, REVISION)
-SHARED = ("writing-principles.md", "patterns.md", "revision-pass.md", "third-party-notices.txt")
+SHARED = ("writing-principles.md", "patterns.md", "revision-pass.md", "third-party-notices.txt",
+          "document-types.md", "examples-and-procedures.md")
 EVALS = Path(__file__).resolve().parent / "evals"
+REVISION_EVALS = Path(__file__).resolve().parents[1] / "technical-revision/evals"
 sys.dont_write_bytecode = True
 
 
@@ -67,11 +71,14 @@ class PackageIntegrity(unittest.TestCase):
                         path = (document.parent / target.split("#")[0]).resolve()
                         self.assertTrue(path.is_relative_to(skill.resolve()) and path.is_file())
 
-    def test_every_writing_reference_is_linked(self):
-        body = (WRITING / "SKILL.md").read_text()
-        for reference in (WRITING / "references").iterdir():
-            with self.subTest(reference=reference.name):
-                self.assertIn(f"references/{reference.name}", body)
+    def test_every_reference_is_linked(self):
+        for skill in SKILLS:
+            body = (skill / "SKILL.md").read_text()
+            self.assertEqual({p.name for p in (skill / "references").iterdir()},
+                             {p.name for p in (REVISION / "references").iterdir()})
+            for reference in (skill / "references").iterdir():
+                with self.subTest(skill=skill.name, reference=reference.name):
+                    self.assertIn(f"references/{reference.name}", body)
 
     def test_writing_skill_does_not_invoke_revision_skill(self):
         # technical-revision disables model invocation, so the bundled pass is the only path.
@@ -81,10 +88,11 @@ class PackageIntegrity(unittest.TestCase):
 
 class EvalCases(unittest.TestCase):
     def cases(self):
-        return sorted(p for p in EVALS.iterdir() if (p / "case.yaml").is_file())
+        return sorted(p for root in (EVALS, REVISION_EVALS) for p in root.iterdir()
+                      if (p / "case.yaml").is_file())
 
     def test_case_layout(self):
-        self.assertEqual(len(self.cases()), 3)
+        self.assertEqual(len(self.cases()), 6)
         for case in self.cases():
             with self.subTest(case=case.name):
                 spec = yaml.safe_load((case / "case.yaml").read_text())

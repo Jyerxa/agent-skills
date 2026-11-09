@@ -5,6 +5,7 @@ on:
       - 'skills/in-progress/technical-writing/**'
       - 'skills/in-progress/technical-revision/**'
       - 'reviews/in-progress/technical-writing/**'
+      - 'reviews/in-progress/technical-revision/**'
       - '.github/workflows/technical-writing.yml'
 permissions:
   contents: read

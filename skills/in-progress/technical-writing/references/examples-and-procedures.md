@@ -25,7 +25,7 @@ verification as well as clear prose.
 
 - Make each example complete enough to run, including imports, setup, and required
   values. Show the smallest example that demonstrates the point.
-- Run what you safely can and compare the result with what you wrote. When you
+- Run what you safely can and compare the result with the document. When you
   cannot run an example, check names, signatures, flags, and defaults against the
   source, and tell the user which examples are unverified.
 - Tag fenced code blocks with their language, such as `bash`, `python`, or `yaml`.

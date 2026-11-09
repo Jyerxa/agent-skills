@@ -1,6 +1,7 @@
 # Document types
 
-Use this guide to shape a document whose type is named or chosen. A template from
+Use this guide to shape or review a document whose type is named, chosen, or
+recognizable. A template from
 the user, team, or repository outranks these defaults. The parts describe what the
 reader needs, not mandatory headings: merge or omit parts in a short document, and
 do not add an empty section to complete a list.
