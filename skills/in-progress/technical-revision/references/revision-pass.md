@@ -7,11 +7,13 @@ or a newly authored draft.
 
 Infer the reader and purpose from the request and source. Preserve required format,
 voice, facts, uncertainty, requirement strength, identifiers, commands, code,
-quotations, and citations. Never invent evidence for a rewrite.
+quotations, and citations. Preserving a fact means not changing its meaning; it
+does not mean keeping every fact. Cut background the reader does not need. Never
+invent evidence for a rewrite.
 
 | Scope | Allowed changes |
 | --- | --- |
-| Prose | Improve wording and sentences; preserve organization, headings, order, and substantive coverage. Remove verbal filler and redundant phrasing. |
+| Prose | Improve wording and sentences, and the presentation of steps, commands, and code; preserve organization, headings, order, and substantive coverage. Remove verbal filler and redundant phrasing. |
 | Composition | Improve selection, grouping, sequence, headings, and depth. Reword only to connect changed sections or avoid duplication. |
 | Both (default) | Review composition first, then prose. |
 
@@ -35,6 +37,12 @@ headings, and optional detail interrupting the main path. Keep conditions and
 limitations beside their actions or claims. Supporting explanations and tables
 can serve the primary purpose; separate them only when they distract.
 
+When the document has a recognizable type, such as a runbook, tutorial, design doc,
+or postmortem, check it against [document types](document-types.md). A missing part,
+such as rollback in a runbook or owners in a postmortem, is a composition finding.
+Follow the user's or repository's template when one exists. Flag missing facts
+instead of inventing them to fill a part.
+
 Move or cut the smallest amount needed. Preserve distinctive evidence and useful
 repetition; do not add sections merely to demonstrate a review.
 
@@ -45,12 +53,26 @@ Identify a reader cost before editing: confusion, unsupported emphasis, repetiti
 inflation, or needless decoding. A matching word alone is insufficient. Prefer a
 direct, supported statement; keep the original when no clearer equivalent exists.
 
+For steps, commands, code, and output, apply [examples and procedures](examples-and-procedures.md):
+put warnings before the step they affect, keep prompt symbols and output out of
+command blocks, tag code blocks, and say where each placeholder's value comes from.
+Keep the text of commands, flags, identifiers, and code unless the source that
+defines them confirms the correct form, for example the tool's code or help output.
+Then correct it, because a reader will copy it, and report the correction. Flag a
+suspected error you cannot confirm instead of guessing.
+
 ## Verify and stop
 
 Compare against the source: facts, conditions, uncertainty, actors, quantities, and
-requirements. Check references, prerequisites, connections, scope, and approval
-limits. Repair failures. Stop when no concrete reader benefit remains; avoid
-synonym cycling or repeated polishing for novelty.
+requirements. When the text describes code, configuration, or data you can inspect,
+check its commands, identifiers, and numbers against them. Report mismatches, source
+conflicts, and contradictions within the document; do not resolve them by guessing
+which version is right. Then read the result as its reader: they can act on it
+alone, prerequisites come before first use, and the source's uncertainty survives. Check references, prerequisites, connections, scope, and approval
+limits. Repair failures. Then check spelling, grammar, punctuation, and consistent
+formatting of headings, lists, emphasis, and code. Do this last so you do not polish
+text you later cut. Stop when no concrete reader benefit remains; avoid synonym
+cycling or repeated polishing for novelty.
 
 Deliver the revised artifact, or briefly say it needs no changes. Report unresolved
 factual gaps or consequential assumptions; add a change report only if requested.

@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: postmortem-recommend-and-approve
+expected_outcome: |
+  A recommend-and-approve proposal that leaves the file untouched. It moves the
+  summary to the top, removes blame and generic conclusions, unifies time zones,
+  flags the confirmed-versus-pending root cause contradiction, leaves unknown
+  owners unassigned, and waits for approval.
+context:
+  scaffold_script: place-files.sh

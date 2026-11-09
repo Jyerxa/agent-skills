@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: postmortem-from-incident-notes
+expected_outcome: |
+  A blameless postmortem at postmortem-inc-2291.md for engineering leadership and
+  the payments team. It keeps the root cause unconfirmed, uses the measured 2.7%
+  impact figure without inventing others, puts the timeline in one time zone with
+  correct conversions, keeps known owners and marks unknown ones, answers the
+  double-charge question, and states that the investigation is still open.
+context:
+  scaffold_script: place-files.sh

@@ -40,8 +40,8 @@ filter installs.
 | Skill | Description |
 | --- | --- |
 | [`architecture-storytelling`](skills/in-progress/architecture-storytelling) | **In progress.** Explain system architecture, business rationale, rules and data flows through a cinematic, presenter-led HTML journey. |
-| [`technical-writing`](skills/in-progress/technical-writing) | **In progress.** Explicitly invoked technical authoring: organize information for the reader, write clear prose, and revise before delivery. |
-| [`technical-revision`](skills/in-progress/technical-revision) | **In progress.** Revise technical prose, composition, or both, autonomously or through recommendations for approval. Works on existing drafts without the authoring skill. |
+| [`technical-writing`](skills/in-progress/technical-writing) | **In progress.** Explicitly invoked technical authoring: verify source facts, organize information for the reader, write clear prose and examples, and revise before delivery. |
+| [`technical-revision`](skills/in-progress/technical-revision) | **In progress.** Revise technical prose, composition, or both, autonomously or through recommendations for approval: cut wordiness, fit the structure to the document type, tidy steps and code, and flag facts that conflict with the source. Works on existing drafts without the authoring skill. |
 | [`capture-process`](skills/in-progress/capture-process) | **In progress.** Interview a practitioner to faithfully capture an existing or envisioned business process in a versioned, evidence-linked model, including manual work, domain language, rules, exceptions, and unresolved questions. |
 | [`visualize-process`](skills/in-progress/visualize-process) | **In progress.** Turn a captured process into a cinematic, portable HTML journey with expressive 3D scenes, choreographed camera movement, progressive discovery, and evidence available on demand. |
 | [`improve-process`](skills/in-progress/improve-process) | **In progress.** Propose evidence-linked changes to a captured process, preserving its baseline and comparing alternatives, tradeoffs, and tests before a decision. |
@@ -70,18 +70,25 @@ Download the HTML and open it locally; no site or server is required.
 
 ### Technical writing workflow
 
-Invoke `technical-writing` by name to author a document. It organizes information,
-writes the prose, then runs `technical-revision` when available or its bundled
-revision procedure when installed alone. The default is a finished draft; request
-an outline checkpoint if you want to review the structure first.
+Invoke `technical-writing` by name to author a document. It checks the facts
+against the source material, organizes the information, writes the prose and
+examples, and then revises the draft with its bundled copy of the
+`technical-revision` procedure. It includes guidance for common document types,
+such as runbooks, tutorials, design docs, and postmortems. The default is a
+finished draft; request an outline checkpoint if you want to review the structure
+first.
 
 Invoke `technical-revision` directly for an existing draft. Choose `prose`,
 `composition`, or `both`, and `autonomous` or `recommend-and-approve`. Omitted
 options mean `both` and `autonomous`. Recommendations include concrete changes;
-the draft is not edited until you approve them in that mode.
+the draft is not edited until you approve them in that mode. Revision keeps
+facts, commands, and requirement words as they are and flags conflicts instead
+of guessing.
 
 Each skill installs independently. They bundle identical principles, revision
-instructions, and pattern guidance.
+instructions, and pattern guidance; `reviews/in-progress/technical-writing/check.py`
+keeps the copies in step. Eval cases for each skill live under
+`reviews/in-progress/`.
 
 ## Plugins
 

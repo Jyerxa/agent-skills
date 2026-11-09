@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: design-doc-prose-only
+expected_outcome: |
+  The design doc is tightened in place without moving or renaming sections. RFC
+  2119 keywords, the quote, numbers, and identifiers are preserved. Hidden verbs,
+  filler, and redundant pairs are cut; the clear and/or is resolved from the
+  setting's values; the ambiguous shall/should is flagged, not chosen.
+context:
+  scaffold_script: place-files.sh

@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: tutorial-with-runnable-examples
+expected_outcome: |
+  A getting-started tutorial at docs/getting-started.md whose code runs in order
+  against the provided tinyq package and whose shown output is real. It explains
+  retry semantics correctly, uses only real API names, gives an install path that
+  works with the provided files or is flagged as unverified, and tags every code
+  block with a language.
+context:
+  scaffold_script: place-files.sh

@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: revise-runbook-steps-and-code
+expected_outcome: |
+  The runbook is edited in place. Filler and history are cut, the purge warning
+  comes before the purge step, commands are copyable and separate from output,
+  command text is unchanged except a reported typo fix, the 6-hour default from
+  the code wins over the conflicting 12-hour claim, meaningful qualifiers stay,
+  and the job ID placeholder is explained.
+context:
+  scaffold_script: place-files.sh
