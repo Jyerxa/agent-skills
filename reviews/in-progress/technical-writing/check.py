@@ -1,4 +1,4 @@
-"""Check the technical-writing and technical-revision packages and their evals.
+"""Check the jy-technical-writing and jy-technical-revision packages and their evals.
 
 Revision eval cases live in reviews/in-progress/technical-revision/evals.
 
@@ -18,8 +18,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-WRITING = ROOT / "skills/in-progress/technical-writing"
-REVISION = ROOT / "skills/in-progress/technical-revision"
+WRITING = ROOT / "skills/jy-technical-writing"
+REVISION = ROOT / "skills/jy-technical-revision"
 SKILLS = (WRITING, REVISION)
 SHARED = ("writing-principles.md", "patterns.md", "revision-pass.md", "third-party-notices.txt",
           "document-types.md", "examples-and-procedures.md")
@@ -38,7 +38,7 @@ class PackageIntegrity(unittest.TestCase):
             with self.subTest(skill=skill.name):
                 meta = frontmatter(skill / "SKILL.md")
                 self.assertEqual(meta["name"], skill.name)
-                self.assertIs(meta["disable-model-invocation"], True)
+                self.assertNotIn("disable-model-invocation", meta)
                 self.assertEqual(meta["metadata"]["lifecycle"], "in-progress")
                 self.assertRegex(meta["metadata"]["version"], r"^0\.0\.[1-9]\d*$")
                 self.assertNotIn("in progress", meta["description"].lower())
@@ -49,7 +49,7 @@ class PackageIntegrity(unittest.TestCase):
                 data = yaml.safe_load((skill / "agents/openai.yaml").read_text())
                 self.assertIn(f"${skill.name}", data["interface"]["default_prompt"])
                 self.assertLessEqual(len(data["interface"]["short_description"]), 64)
-                self.assertIs(data["policy"]["allow_implicit_invocation"], False)
+                self.assertIs(data["policy"]["allow_implicit_invocation"], True)
 
     def test_shared_references_are_identical(self):
         for name in SHARED:
@@ -81,9 +81,9 @@ class PackageIntegrity(unittest.TestCase):
                     self.assertIn(f"references/{reference.name}", body)
 
     def test_writing_skill_does_not_invoke_revision_skill(self):
-        # technical-revision disables model invocation, so the bundled pass is the only path.
+        # Writing bundles the revision pass; invoking jy-technical-revision too would revise twice.
         body = (WRITING / "SKILL.md").read_text()
-        self.assertNotRegex(body, r"(?i)\brun technical-revision\b")
+        self.assertNotRegex(body, r"(?i)\brun (?:jy-)?technical-revision\b")
 
 
 class EvalCases(unittest.TestCase):

@@ -1,9 +1,8 @@
 ---
-name: technical-revision
+name: jy-technical-revision
 description: 'Revise technical prose, composition, or both, with autonomous editing or approval before changes: cut wordiness, fit the structure to the document type, tidy steps and code samples, and flag facts that do not match the source.'
-disable-model-invocation: true
 metadata:
-  version: "0.0.2"
+  version: "0.0.3"
   lifecycle: "in-progress"
 ---
 

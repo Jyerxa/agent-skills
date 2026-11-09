@@ -1,9 +1,8 @@
 ---
-name: technical-writing
+name: jy-technical-writing
 description: 'Author technical documents such as runbooks, tutorials, references, design docs, and postmortems: verify source facts, organize for the reader, write clear prose and examples, and revise before delivery.'
-disable-model-invocation: true
 metadata:
-  version: "0.0.2"
+  version: "0.0.3"
   lifecycle: "in-progress"
 ---
 
@@ -98,7 +97,7 @@ requirements. Do not replace a vague claim with an invented mechanism or number.
 Revise the draft with the bundled [revision pass](references/revision-pass.md)
 and its [pattern catalog](references/patterns.md). Default to both composition
 and prose, autonomously; honor requested revision options and checkpoints. This
-is the same procedure the technical-revision skill applies, so do not invoke that
+is the same procedure the jy-technical-revision skill applies, so do not invoke that
 skill as well. Revision never restarts the authoring workflow.
 
 Then read the draft as its reader and repair what fails:

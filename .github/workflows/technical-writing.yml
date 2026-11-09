@@ -2,8 +2,8 @@ name: Technical writing skill checks
 on:
   pull_request:
     paths:
-      - 'skills/in-progress/technical-writing/**'
-      - 'skills/in-progress/technical-revision/**'
+      - 'skills/jy-technical-writing/**'
+      - 'skills/jy-technical-revision/**'
       - 'reviews/in-progress/technical-writing/**'
       - 'reviews/in-progress/technical-revision/**'
       - '.github/workflows/technical-writing.yml'
