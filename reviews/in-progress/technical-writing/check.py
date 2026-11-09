@@ -54,6 +54,10 @@ class PackageIntegrity(unittest.TestCase):
                                  (REVISION / "references" / name).read_text(),
                                  "edit both copies together and bump both versions")
 
+    def test_pattern_ids_are_unique_and_sequential(self):
+        ids = re.findall(r"^\*\*P(\d+):", (WRITING / "references/patterns.md").read_text(), re.M)
+        self.assertEqual([int(i) for i in ids], list(range(1, len(ids) + 1)))
+
     def test_links_stay_inside_each_skill(self):
         for skill in SKILLS:
             for document in sorted(skill.rglob("*.md")):

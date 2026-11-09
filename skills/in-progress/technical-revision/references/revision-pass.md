@@ -49,8 +49,10 @@ direct, supported statement; keep the original when no clearer equivalent exists
 
 Compare against the source: facts, conditions, uncertainty, actors, quantities, and
 requirements. Check references, prerequisites, connections, scope, and approval
-limits. Repair failures. Stop when no concrete reader benefit remains; avoid
-synonym cycling or repeated polishing for novelty.
+limits. Repair failures. Then check spelling, grammar, punctuation, and consistent
+formatting of headings, lists, emphasis, and code. Do this last so you do not polish
+text you later cut. Stop when no concrete reader benefit remains; avoid synonym
+cycling or repeated polishing for novelty.
 
 Deliver the revised artifact, or briefly say it needs no changes. Report unresolved
 factual gaps or consequential assumptions; add a change report only if requested.

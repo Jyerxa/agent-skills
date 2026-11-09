@@ -3,7 +3,7 @@ name: technical-revision
 description: 'Revise technical prose, composition, or both, with autonomous editing or approval before changes.'
 disable-model-invocation: true
 metadata:
-  version: "0.0.1"
+  version: "0.0.2"
   lifecycle: "in-progress"
 ---
 
