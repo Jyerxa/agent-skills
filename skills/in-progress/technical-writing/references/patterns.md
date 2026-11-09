@@ -71,7 +71,7 @@ only recurring problems with distinct remedies. Keep triggers and exceptions tog
 
 **P28: Mixed forms in parallel items; shifts in tense, person, or tone.** Give steps, list items, and same-level headings one grammatical form. Use present tense for behavior and past tense for events, "you" for the reader, and one tone throughout. Keep tense changes that report real changes in time.
 
-**P29: "Shall," "and/or," slashes between alternatives.** Use "must" for requirements; replace "and/or" with "or," "and," or "X, Y, or both"; choose one alternative or write both. Keep "shall" where a standard or contract defines it, and keep slashes in paths, units, fractions, and established terms such as I/O.
+**P29: "Shall," "and/or," slashes between alternatives.** Use "must" for requirements; replace "and/or" with "or," "and," or "X, Y, or both"; choose one alternative or write both. When the source does not say which alternative it means, especially between requirement strengths such as "shall/should," keep the wording and flag it rather than choosing. Keep "shall" where a standard or contract defines it, and keep slashes in paths, units, fractions, and established terms such as I/O.
 
 Adapted from Lauren Tan, Unslop. Context and evidence checks replace blanket bans.
 P23 through P29 and the added triggers in P04, P05, P13, P14, P15, P17, and P19

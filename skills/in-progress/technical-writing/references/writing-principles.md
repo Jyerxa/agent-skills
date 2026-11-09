@@ -126,7 +126,7 @@ running." Keep real prohibitions such as "Do not delete the encryption key."
 Preserve distinctions such as may/must, some/all, and optional/required. Use
 "must" for requirements rather than "shall," except in text that defines "shall"
 or follows a standard that uses it. Replace "and/or" with "or," "and," or "X, Y,
-or both." Use "because" for cause when "since" could be mistaken for time.
+or both," and flag the choice when the source does not settle it. Use "because" for cause when "since" could be mistaken for time.
 
 ## Sources and adaptations
 
