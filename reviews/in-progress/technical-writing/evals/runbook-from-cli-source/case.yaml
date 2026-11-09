@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: runbook-from-cli-source
+expected_outcome: |
+  A runbook at docs/runbooks/rotate-webhook-signing-key.md that an on-call
+  engineer can follow without help. Its commands match keyctl.py rather than the
+  stale tool README, it states the token prerequisite first, uses a dry run
+  before the real rotation, covers prod confirmation, the rotation-in-progress
+  error, rollback with revert during the grace window, and escalation in the
+  style of the existing runbook. The reply flags the README conflict.
+context:
+  scaffold_script: place-files.sh
